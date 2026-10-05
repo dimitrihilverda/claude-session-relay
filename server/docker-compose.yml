@@ -1,0 +1,48 @@
+# Self-hosted session relay. Usage:
+#   cp .env.example .env    # set RELAY_DB_PASS
+#   docker compose up -d
+#   docker compose exec relay relay person:create Alice
+# Put a TLS-terminating reverse proxy in front of port 8080 (see README).
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: relay
+      POSTGRES_PASSWORD: ${RELAY_DB_PASS:?set RELAY_DB_PASS in .env}
+      POSTGRES_DB: relay
+    volumes:
+      - relay-db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relay -d relay"]
+      interval: 5s
+      retries: 20
+
+  relay:
+    build: .
+    restart: unless-stopped
+    environment:
+      RELAY_DSN: "pgsql:host=db;dbname=relay"
+      RELAY_DB_USER: relay
+      RELAY_DB_PASS: ${RELAY_DB_PASS}
+    ports:
+      - "${RELAY_PORT:-8080}:80"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Nightly cleanup of stale sessions (> 24 h) and old messages (> 30 days).
+  cleanup:
+    build: .
+    restart: unless-stopped
+    environment:
+      RELAY_DSN: "pgsql:host=db;dbname=relay"
+      RELAY_DB_USER: relay
+      RELAY_DB_PASS: ${RELAY_DB_PASS}
+    entrypoint: ["sh", "-c", "while true; do sleep 86400; relay cleanup; done"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  relay-db:

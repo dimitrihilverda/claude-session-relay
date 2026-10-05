@@ -1,0 +1,4 @@
+server/vendor/
+server/config.php
+server/.env
+server/.phpunit.cache/

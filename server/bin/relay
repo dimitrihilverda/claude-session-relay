@@ -1,0 +1,48 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+/** Uses */
+
+use Relay\Auth;
+use Relay\Config;
+use Relay\Db;
+use Relay\Migrator;
+use Relay\Opruimer;
+
+require __DIR__ . '/../bootstrap.php';
+
+$pdo = Db::verbind(Config::laad(__DIR__ . '/../config.php'));
+$commando = $argv[1] ?? '';
+$naam = $argv[2] ?? '';
+
+switch($commando) {
+	case 'migreer':
+	case 'migrate':
+		foreach((new Migrator($pdo, __DIR__ . '/../migrations'))->migreer() as $bestand) {
+			echo "migrated $bestand\n";
+		}
+		break;
+	case 'persoon:maak':
+	case 'person:create':
+		$persoon = (new Auth($pdo))->maakPersoon($naam);
+		fwrite(STDERR, "Token for {$persoon['naam']} (shown once; an existing token is now invalid):\n");
+		echo $persoon['token'] . "\n";
+		break;
+	case 'persoon:intrekken':
+	case 'person:revoke':
+		if((new Auth($pdo))->trekIn($naam) === false) {
+			fwrite(STDERR, "Unknown person $naam.\n");
+			exit(1);
+		}
+		echo "revoked $naam\n";
+		break;
+	case 'opruimen':
+	case 'cleanup':
+		$aantal = (new Opruimer($pdo))->ruimOp();
+		echo "removed {$aantal['sessies']} sessions, {$aantal['berichten']} messages\n";
+		break;
+	default:
+		fwrite(STDERR, "usage: relay migrate | person:create <name> | person:revoke <name> | cleanup\n");
+		exit(1);
+}

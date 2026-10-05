@@ -1,0 +1,17 @@
+{
+	"name": "dimitrihilverda/claude-session-relay",
+	"type": "project",
+	"require": {
+		"php": ">=8.4",
+		"ext-pdo_pgsql": "*"
+	},
+	"require-dev": {
+		"phpunit/phpunit": "^12.0"
+	},
+	"autoload": {
+		"psr-4": { "Relay\\": "src/" }
+	},
+	"autoload-dev": {
+		"psr-4": { "Relay\\Tests\\": "tests/" }
+	}
+}

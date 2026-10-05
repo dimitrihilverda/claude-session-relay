@@ -1,0 +1,15 @@
+{
+  "name": "claude-session-relay",
+  "owner": {
+    "name": "Dimitri Hilverda",
+    "url": "https://github.com/dimitrihilverda"
+  },
+  "description": "Session Relay: Claude Code sessions that coordinate across machines.",
+  "plugins": [
+    {
+      "name": "session-relay",
+      "source": "./plugin",
+      "description": "Shared board, messages and git-conflict checks between Claude Code sessions on different machines."
+    }
+  ]
+}

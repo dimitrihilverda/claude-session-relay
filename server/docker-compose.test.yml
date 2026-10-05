@@ -1,0 +1,36 @@
+x-relay-env: &relay-env
+  RELAY_DSN: "pgsql:host=db;dbname=relay_test"
+  RELAY_DB_USER: relay
+  RELAY_DB_PASS: relay
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: relay
+      POSTGRES_PASSWORD: relay
+      POSTGRES_DB: relay_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relay -d relay_test"]
+      interval: 2s
+      retries: 30
+  php:
+    build: { context: ., dockerfile: docker/Dockerfile.test }
+    working_dir: /app
+    volumes: [".:/app"]
+    environment: *relay-env
+    depends_on: { db: { condition: service_healthy } }
+  web:
+    build: { context: ., dockerfile: docker/Dockerfile.test }
+    working_dir: /app
+    volumes: [".:/app"]
+    environment:
+      <<: *relay-env
+      PHP_CLI_SERVER_WORKERS: "8"
+    command: ["php", "-S", "0.0.0.0:8080", "-t", "public", "public/index.php"]
+    ports: ["8089:8080"]
+    depends_on: { db: { condition: service_healthy } }
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://localhost:8080/gezond') === false ? 1 : 0);"]
+      interval: 2s
+      retries: 30

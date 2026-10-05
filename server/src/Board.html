@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session board</title>
+<link rel="icon" href="data:,">
+<style>
+:root {
+	--bg: #f7f9fd; --card: #ffffff; --text: #313a45; --head: #1f262f; --muted: #5b6573;
+	--line: #e1e7f0; --accent: #8dc63f; --stale: #9aa3ae; --warn: #b54708;
+}
+@media (prefers-color-scheme: dark) {
+	:root { --bg: #161b22; --card: #1f262f; --text: #d9dee6; --head: #f7f9fd; --muted: #9aa3ae; --line: #313a45; --stale: #6b7480; --warn: #f5a35c; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { padding: 24px 16px 8px; max-width: 1200px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; justify-content: space-between; }
+h1 { margin: 0; font-size: 28px; color: var(--head); }
+h1::after { content: ""; display: block; width: 56px; height: 4px; margin-top: 8px; border-radius: 2px; background: var(--accent); }
+#status { color: var(--muted); font-size: 14px; }
+#status.fout { color: var(--warn); }
+main { max-width: 1200px; margin: 0 auto; padding: 8px 16px 48px; }
+.persoon { margin-top: 24px; }
+.persoon h2 { font-size: 18px; color: var(--head); margin: 0 0 8px; }
+.kaarten { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.kaart { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; min-width: 0; }
+.kaart.stil { opacity: 0.6; }
+.naam { font-family: ui-monospace, Consolas, monospace; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.repo { font-size: 18px; font-weight: 600; color: var(--head); margin: 4px 0; overflow-wrap: anywhere; }
+.regel { font-size: 14px; color: var(--muted); }
+.branch { font-family: ui-monospace, Consolas, monospace; color: var(--text); }
+.ticket { display: inline-block; padding: 0 8px; border-radius: 999px; background: var(--accent); color: #1f262f; font-size: 13px; font-weight: 600; }
+.claims { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.claim { font-family: ui-monospace, Consolas, monospace; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); overflow-wrap: anywhere; }
+.leeg { color: var(--muted); margin-top: 32px; }
+form { max-width: 520px; margin: 48px auto; padding: 24px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+form label { display: block; font-weight: 600; color: var(--head); margin-bottom: 8px; }
+form input { width: 100%; padding: 10px 12px; font: inherit; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); }
+form button, #uitloggen { margin-top: 12px; padding: 10px 20px; font: inherit; font-weight: 600; border: 0; border-radius: 999px; background: var(--accent); color: #1f262f; cursor: pointer; }
+#uitloggen { margin-top: 0; padding: 4px 14px; font-size: 13px; background: transparent; border: 1px solid var(--line); color: var(--muted); }
+form p { color: var(--muted); font-size: 14px; margin: 12px 0 0; }
+</style>
+</head>
+<body>
+<header>
+	<h1>Session board</h1>
+	<div><span id="status">loading...</span> <button id="uitloggen" hidden>Forget token</button></div>
+</header>
+<main id="inhoud"></main>
+<template id="inlog">
+	<form id="tokenform">
+		<label for="token">Your relay token</label>
+		<input id="token" type="password" autocomplete="off" required>
+		<button type="submit">Show the board</button>
+		<p>The token stays in this browser only. You see the board of all machines; messages between sessions are not shown here.</p>
+	</form>
+</template>
+<script>
+(function () {
+	'use strict';
+	var SLEUTEL = 'session-relay-token';
+	var inhoud = document.getElementById('inhoud');
+	var status = document.getElementById('status');
+	var uitloggen = document.getElementById('uitloggen');
+	var timer = null;
+
+	function leesToken() { try { return localStorage.getItem(SLEUTEL); } catch (e) { return null; } }
+	function bewaarToken(t) { try { localStorage.setItem(SLEUTEL, t); } catch (e) {} }
+	function wisToken() { try { localStorage.removeItem(SLEUTEL); } catch (e) {} }
+
+	// All data comes from other people's sessions: only ever set it via textContent.
+	function el(tag, klasse, tekst) {
+		var e = document.createElement(tag);
+		if (klasse) { e.className = klasse; }
+		if (tekst !== undefined && tekst !== null) { e.textContent = String(tekst); }
+		return e;
+	}
+
+	function geleden(iso) {
+		var s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+		if (s < 60) { return s + ' s ago'; }
+		if (s < 3600) { return Math.round(s / 60) + ' min ago'; }
+		return Math.round(s / 3600) + ' h ago';
+	}
+
+	function toonInlog(melding) {
+		if (timer) { clearInterval(timer); timer = null; }
+		uitloggen.hidden = true;
+		inhoud.textContent = '';
+		inhoud.appendChild(document.getElementById('inlog').content.cloneNode(true));
+		status.textContent = melding || '';
+		status.className = melding ? 'fout' : '';
+		document.getElementById('tokenform').addEventListener('submit', function (ev) {
+			ev.preventDefault();
+			bewaarToken(document.getElementById('token').value.trim());
+			start();
+		});
+	}
+
+	function toonBord(sessies) {
+		inhoud.textContent = '';
+		if (!sessies.length) {
+			inhoud.appendChild(el('p', 'leeg', 'No session is active right now.'));
+			return;
+		}
+		var perPersoon = {};
+		sessies.forEach(function (s) { (perPersoon[s.persoon] = perPersoon[s.persoon] || []).push(s); });
+		Object.keys(perPersoon).sort().forEach(function (persoon) {
+			var blok = el('section', 'persoon');
+			blok.appendChild(el('h2', '', persoon + ' (' + perPersoon[persoon].length + ')'));
+			var kaarten = el('div', 'kaarten');
+			perPersoon[persoon].forEach(function (s) {
+				var stil = (Date.now() - Date.parse(s.laatst_gezien)) > 180000;
+				var k = el('article', 'kaart' + (stil ? ' stil' : ''));
+				k.appendChild(el('div', 'naam', s.naam));
+				k.appendChild(el('div', 'repo', s.repo));
+				var r = el('div', 'regel');
+				if (s.branch) { r.appendChild(el('span', 'branch', s.branch)); r.appendChild(document.createTextNode(' ')); }
+				if (s.ticket) { r.appendChild(el('span', 'ticket', s.ticket)); }
+				k.appendChild(r);
+				k.appendChild(el('div', 'regel', s.machine + ' · active ' + geleden(s.laatst_gezien)));
+				var claim = (s.claim || []).filter(Boolean);
+				if (claim.length) {
+					var c = el('div', 'claims');
+					claim.slice(0, 8).forEach(function (p) { c.appendChild(el('span', 'claim', p)); });
+					if (claim.length > 8) { c.appendChild(el('span', 'claim', '+' + (claim.length - 8) + ' more')); }
+					k.appendChild(c);
+				}
+				kaarten.appendChild(k);
+			});
+			blok.appendChild(kaarten);
+			inhoud.appendChild(blok);
+		});
+	}
+
+	function haal() {
+		var token = leesToken();
+		if (!token) { toonInlog(); return; }
+		fetch('/bord', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' })
+			.then(function (antw) {
+				if (antw.status === 401) { wisToken(); toonInlog('That token is not valid (any more).'); return null; }
+				if (!antw.ok) { throw new Error('status ' + antw.status); }
+				return antw.json();
+			})
+			.then(function (data) {
+				if (!data) { return; }
+				uitloggen.hidden = false;
+				toonBord(data.sessies || []);
+				status.className = '';
+				status.textContent = 'updated ' + new Date().toLocaleTimeString();
+			})
+			.catch(function (e) {
+				status.className = 'fout';
+				status.textContent = 'relay unreachable (' + e.message + '), retrying';
+			});
+	}
+
+	function start() {
+		if (!leesToken()) { toonInlog(); return; }
+		inhoud.textContent = '';
+		haal();
+		if (timer) { clearInterval(timer); }
+		timer = setInterval(haal, 5000);
+	}
+
+	uitloggen.addEventListener('click', function () { wisToken(); toonInlog(); });
+	start();
+}());
+</script>
+</body>
+</html>
