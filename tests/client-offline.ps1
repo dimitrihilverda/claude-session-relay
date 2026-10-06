@@ -165,6 +165,8 @@ try {
     Expect 'relays without config: hint' ($r.code -eq 0 -and $r.out -match 'no relays') $r.out
 
     # --- relays ---
+    $r = Client @('relay', 'add', 'plain', 'http://relay.example.com', 'secret-token-x', 'Alice') $tmp
+    Expect 'relay add: plain http to a remote host is refused' ($r.code -ne 0 -and $r.out -match 'use https://' -and $r.out -notmatch 'secret-token-x') $r.out
     $r = Client @('relay', 'add', 'work', $fakeA.url, 'secret-token-a', 'Alice') $tmp
     Expect 'relay add: saved and reachable, teams from /me' ($r.code -eq 0 -and $r.out -match 'relay work saved' -and $r.out -match 'teams: acme, beta') $r.out
     Expect 'relay add: never prints the token' ($r.out -notmatch 'secret-token-a') $r.out

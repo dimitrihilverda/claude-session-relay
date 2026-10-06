@@ -1,7 +1,7 @@
 {
   "name": "session-relay",
   "displayName": "Session Relay",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Let Claude Code sessions on different machines see each other, message each other and avoid colliding git commits and pushes, via a small self-hosted relay.",
   "author": {
     "name": "Dimitri Hilverda",
@@ -10,5 +10,14 @@
   "homepage": "https://github.com/dimitrihilverda/claude-session-relay",
   "repository": "https://github.com/dimitrihilverda/claude-session-relay",
   "license": "MIT",
-  "keywords": ["collaboration", "multi-agent", "git", "hooks", "team"]
+  "keywords": [
+    "collaboration",
+    "multi-agent",
+    "git",
+    "hooks",
+    "team"
+  ],
+  "icon": "./.claude-plugin/icon.png",
+  "documentationUrl": "https://github.com/dimitrihilverda/claude-session-relay#readme",
+  "supportUrl": "https://github.com/dimitrihilverda/claude-session-relay/issues"
 }

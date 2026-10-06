@@ -282,8 +282,14 @@ function Read-Body($Response) {
 }
 
 # Returns @{ ok; status; data; error }. Never throws.
+# The token only ever travels over https; plain http is allowed for a relay on this machine (testing).
+function Test-SafeRelayUrl([string]$Url) {
+    return ($Url -match '^https://[^/\s]+' -or $Url -match '^http://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(/|$)')
+}
+
 function Invoke-Relay($Relay, [string]$Method, [string]$Path, $Body = $null, [int]$TimeoutSec = 5) {
     try {
+        if (-not (Test-SafeRelayUrl ([string]$Relay.url))) { throw "refusing to send the token to $($Relay.url): use https://" }
         $param = @{
             Method = $Method; Uri = ($Relay.url.TrimEnd('/') + $Path); TimeoutSec = $TimeoutSec; UseBasicParsing = $true
             Headers = @{ Authorization = "Bearer $($Relay.token)" }
@@ -576,7 +582,7 @@ function Invoke-RelayCommand($o) {
 
 function Add-Relay($Cfg, [string]$Name, [string]$Url, [string]$Token, [string]$Person) {
     if ($Name -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') { Stop-WithUsage "invalid relay name '$Name' (letters, digits, . _ -)" }
-    if ($Url -notmatch '^https?://') { Stop-WithUsage "invalid url '$Url' (must start with http:// or https://)" }
+    if (-not (Test-SafeRelayUrl $Url)) { Stop-WithUsage "invalid url '$Url' (use https://; plain http:// only for localhost)" }
     if (-not $Token) { Stop-WithUsage 'empty token' }
     if ($Person -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') { Stop-WithUsage "invalid person '$Person'" }
     $relay = @{ name = $Name; url = $Url.TrimEnd('/'); token = $Token; person = $Person.ToLower() }
