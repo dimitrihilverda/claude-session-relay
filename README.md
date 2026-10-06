@@ -3,6 +3,10 @@
 Let Claude Code sessions on **different machines** see each other, message each other and stay
 out of each other's way in git.
 
+![Two Claude Code sessions on two machines: a shared board, a question and an answer between the sessions, and a git push that is stopped because the other session is on the same branch](docs/demo.gif)
+
+<sub>Real client output against a local relay; in practice Claude runs these commands for you.</sub>
+
 When several people (or several Claude sessions) work in the same repositories, nobody knows
 what the other sessions are doing. Claude Code's own `ListAgents`/`SendMessage` only reach
 sessions on the same machine or the same account. Session Relay adds a tiny self-hosted relay
