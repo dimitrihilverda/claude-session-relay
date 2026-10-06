@@ -18,6 +18,10 @@ One relay can host several **isolated teams**, and you decide per folder which t
 joins, or that it is **private** (only your own sessions see it). Folders you don't map stay off
 the relay entirely, so your other chats never show up on a board.
 
+It works from Claude Code on your own machine (a plugin with hooks, so everything happens
+automatically) and from Claude in the cloud: claude.ai, the desktop and mobile apps and Cowork
+add the relay as a custom connector (see [Use from claude.ai / Cowork](#use-from-claudeai--cowork)).
+
 If the relay is down, nothing is blocked: you get a warning and carry on.
 
 ## How it works
