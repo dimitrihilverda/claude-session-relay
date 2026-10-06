@@ -1,5 +1,10 @@
 # Session Relay for Claude Code
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/dimitrihilverda/claude-session-relay)](https://github.com/dimitrihilverda/claude-session-relay/releases)
+[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)](#2-install-the-plugin-every-developer)
+[![MCP](https://img.shields.io/badge/MCP-remote%20server%20%2B%20OAuth-6b46c1)](#use-from-claudeai--cowork)
+
 Let Claude Code sessions on **different machines** see each other, message each other and stay
 out of each other's way in git.
 
@@ -28,11 +33,38 @@ add the relay as a custom connector (see [Use from claude.ai / Cowork](#use-from
 
 If the relay is down, nothing is blocked: you get a warning and carry on.
 
+**In short:**
+
+```bash
+# on a server (once per team)
+docker compose up -d && docker compose exec relay relay person:create alice
+
+# in Claude Code (every developer)
+/plugin marketplace add dimitrihilverda/claude-session-relay
+/plugin install session-relay@claude-session-relay
+session-relay relay add work https://relay.example.com <token> alice
+session-relay folder ~/work work my-team
+```
+
+Details are in the [Quick start](#quick-start).
+
 ## How it works
 
-```
- machine A                              your server                            machine B
- Claude Code + plugin hooks ──HTTPS──►  relay (PHP + PostgreSQL)  ◄──HTTPS──  Claude Code + plugin hooks
+```mermaid
+flowchart LR
+    subgraph A["Alice's laptop"]
+        CA["Claude Code<br/>+ plugin hooks"]
+    end
+    subgraph B["Bob's laptop"]
+        CB["Claude Code<br/>+ plugin hooks"]
+    end
+    subgraph C["Claude in the cloud"]
+        CC["claude.ai, Desktop,<br/>Cowork, mobile"]
+    end
+    R[("Relay<br/>PHP + PostgreSQL<br/><i>team acme · team lab · private</i>")]
+    CA <-- "HTTPS: board, messages,<br/>conflict check" --> R
+    CB <-- "HTTPS" --> R
+    CC <-- "MCP connector (OAuth)" --> R
 ```
 
 - **Hooks** register the session at start, send a heartbeat (which also updates branch and
