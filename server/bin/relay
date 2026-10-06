@@ -5,44 +5,84 @@ declare(strict_types=1);
 /** Uses */
 
 use Relay\Auth;
+use Relay\Cleaner;
 use Relay\Config;
 use Relay\Db;
 use Relay\Migrator;
-use Relay\Opruimer;
+use Relay\TeamStore;
 
 require __DIR__ . '/../bootstrap.php';
 
-$pdo = Db::verbind(Config::laad(__DIR__ . '/../config.php'));
-$commando = $argv[1] ?? '';
-$naam = $argv[2] ?? '';
+const USAGE = <<<'TXT'
+usage: relay <command>
+  migrate                        run new database migrations
+  person:create <name>           create a person (or give them a new token)
+  person:revoke <name>           revoke a person's token
+  team:create <name>             create a team
+  team:rename <old> <new>        rename a team (its sessions and messages move along)
+  team:add <team> <person>       add a person to a team
+  team:remove <team> <person>    remove a person from a team (drops their sessions in it)
+  team:list                      list teams and their members
+  cleanup                        remove stale sessions (> 24 h) and old messages (> 30 days)
 
-switch($commando) {
-	case 'migreer':
-	case 'migrate':
-		foreach((new Migrator($pdo, __DIR__ . '/../migrations'))->migreer() as $bestand) {
-			echo "migrated $bestand\n";
-		}
-		break;
-	case 'persoon:maak':
-	case 'person:create':
-		$persoon = (new Auth($pdo))->maakPersoon($naam);
-		fwrite(STDERR, "Token for {$persoon['naam']} (shown once; an existing token is now invalid):\n");
-		echo $persoon['token'] . "\n";
-		break;
-	case 'persoon:intrekken':
-	case 'person:revoke':
-		if((new Auth($pdo))->trekIn($naam) === false) {
-			fwrite(STDERR, "Unknown person $naam.\n");
+TXT;
+
+$pdo = Db::connect(Config::load(__DIR__ . '/../config.php'));
+$command = $argv[1] ?? '';
+$a = $argv[2] ?? '';
+$b = $argv[3] ?? '';
+$teams = new TeamStore($pdo);
+
+try {
+	switch($command) {
+		case 'migrate':
+			foreach((new Migrator($pdo, __DIR__ . '/../migrations'))->migrate() as $file) {
+				echo "migrated $file\n";
+			}
+			break;
+		case 'person:create':
+			$person = (new Auth($pdo))->createPerson($a);
+			fwrite(STDERR, "Token for {$person['name']} (shown once; an existing token is now invalid):\n");
+			echo $person['token'] . "\n";
+			break;
+		case 'person:revoke':
+			if((new Auth($pdo))->revoke($a) === false) {
+				throw new InvalidArgumentException("Unknown person $a.");
+			}
+			echo "revoked $a\n";
+			break;
+		case 'team:create':
+			$teams->create($a);
+			echo "created team $a\n";
+			break;
+		case 'team:rename':
+			$teams->rename($a, $b);
+			echo "renamed $a to $b\n";
+			break;
+		case 'team:add':
+			$teams->add($a, $b);
+			echo "added $b to $a\n";
+			break;
+		case 'team:remove':
+			if($teams->remove($a, $b) === false) {
+				throw new InvalidArgumentException("$b is not a member of $a.");
+			}
+			echo "removed $b from $a\n";
+			break;
+		case 'team:list':
+			foreach($teams->list() as $team) {
+				echo $team['name'] . ': ' . implode(', ', $team['members']) . "\n";
+			}
+			break;
+		case 'cleanup':
+			$count = (new Cleaner($pdo))->cleanUp();
+			echo "removed {$count['sessions']} sessions, {$count['messages']} messages\n";
+			break;
+		default:
+			fwrite(STDERR, USAGE);
 			exit(1);
-		}
-		echo "revoked $naam\n";
-		break;
-	case 'opruimen':
-	case 'cleanup':
-		$aantal = (new Opruimer($pdo))->ruimOp();
-		echo "removed {$aantal['sessies']} sessions, {$aantal['berichten']} messages\n";
-		break;
-	default:
-		fwrite(STDERR, "usage: relay migrate | person:create <name> | person:revoke <name> | cleanup\n");
-		exit(1);
+	}
+} catch(InvalidArgumentException $e) {
+	fwrite(STDERR, $e->getMessage() . "\n");
+	exit(1);
 }

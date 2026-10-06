@@ -9,9 +9,9 @@ namespace Relay;
 use PDO;
 
 /**
- * Maakt de PDO-verbinding met PostgreSQL.
+ * Creates the PDO connection to PostgreSQL.
  * @author Dimitri Hilverda
- * @date 05-10-2026
+ * @date 06-10-2026
  */
 final class Db
 {
@@ -19,7 +19,7 @@ final class Db
 	 * @param array{dsn:string,user:string,pass:string} $config
 	 * @return PDO
 	 */
-	public static function verbind(array $config): PDO
+	public static function connect(array $config): PDO
 	{
 		//Connect with exceptions and associative rows:
 		$pdo = new PDO($config['dsn'], $config['user'], $config['pass'], array(

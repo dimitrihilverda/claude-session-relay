@@ -1,7 +1,9 @@
 # Self-hosted session relay. Usage:
 #   cp .env.example .env    # set RELAY_DB_PASS
 #   docker compose up -d
-#   docker compose exec relay relay person:create Alice
+#   docker compose exec relay relay person:create alice      # prints the token once
+#   docker compose exec relay relay team:create my-team
+#   docker compose exec relay relay team:add my-team alice
 # Put a TLS-terminating reverse proxy in front of port 8080 (see README).
 services:
   db:

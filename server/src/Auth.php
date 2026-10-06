@@ -10,9 +10,9 @@ use InvalidArgumentException;
 use PDO;
 
 /**
- * Personen en hun tokens. Tokens staan alleen als SHA-256-hash in de database.
+ * Persons and their tokens. Tokens are only stored as a SHA-256 hash.
  * @author Dimitri Hilverda
- * @date 05-10-2026
+ * @date 06-10-2026
  */
 final class Auth
 {
@@ -33,56 +33,67 @@ final class Auth
 	}
 
 	/**
-	 * Maakt een persoon, of geeft een bestaande persoon een nieuw token (en zet hem weer actief).
-	 * @param string $naam
-	 * @return array{id:int,naam:string,token:string}
+	 * Creates a person, or gives an existing person a new token (and makes them active again).
+	 * @param string $name
+	 * @return array{id:int,name:string,token:string}
 	 * @throws InvalidArgumentException
 	 */
-	public function maakPersoon(string $naam): array
+	public function createPerson(string $name): array
 	{
 		//Validate input:
-		$naam = trim($naam);
-		if(preg_match('/^[A-Za-z][A-Za-z0-9_-]{1,39}$/', $naam) !== 1) {
+		$name = trim($name);
+		if(preg_match('/^[A-Za-z][A-Za-z0-9_-]{1,39}$/', $name) !== 1) {
 			throw new InvalidArgumentException('Name must be 2-40 characters and start with a letter.');
+		}
+
+		//Session names start with "<person>-", so no two persons may share that name space:
+		$st = $this->pdo->prepare(
+			"SELECT name FROM person WHERE name <> :name AND (lower(name) = lower(:same)
+				OR starts_with(lower(name), lower(:prefix) || '-') OR starts_with(lower(:longer), lower(name) || '-'))"
+		);
+		$st->execute(array('name' => $name, 'same' => $name, 'prefix' => $name, 'longer' => $name));
+		$clash = $st->fetchColumn();
+		if($clash !== false) {
+			throw new InvalidArgumentException("Name $name clashes with existing person $clash (session names start with the person name).");
 		}
 
 		//Upsert with a fresh token:
 		$token = bin2hex(random_bytes(32));
 		$st = $this->pdo->prepare(
-			'INSERT INTO persoon (naam, token_hash) VALUES (:naam, :hash)
-			 ON CONFLICT (naam) DO UPDATE SET token_hash = EXCLUDED.token_hash, actief = true
+			'INSERT INTO person (name, token_hash) VALUES (:name, :hash)
+			 ON CONFLICT (name) DO UPDATE SET token_hash = EXCLUDED.token_hash, active = true
 			 RETURNING id'
 		);
-		$st->execute(array('naam' => $naam, 'hash' => self::hash($token)));
+		$st->execute(array('name' => $name, 'hash' => self::hash($token)));
 
-		return array('id' => (int) $st->fetchColumn(), 'naam' => $naam, 'token' => $token);
+		return array('id' => (int) $st->fetchColumn(), 'name' => $name, 'token' => $token);
 	}
 
 	/**
-	 * @param string $naam
-	 * @return bool Of de persoon bestond.
+	 * @param string $name
+	 * @return bool Whether the person existed.
 	 */
-	public function trekIn(string $naam): bool
+	public function revoke(string $name): bool
 	{
-		$st = $this->pdo->prepare('UPDATE persoon SET actief = false WHERE naam = ?');
-		$st->execute(array($naam));
+		$st = $this->pdo->prepare('UPDATE person SET active = false WHERE lower(name) = lower(?)');
+		$st->execute(array($name));
 
 		return $st->rowCount() > 0;
 	}
 
 	/**
 	 * @param string|null $token
-	 * @return array{id:int,naam:string}|null
+	 * @return array{id:int,name:string}|null
 	 */
-	public function persoonVoorToken(?string $token): ?array
+	public function personForToken(?string $token): ?array
 	{
 		if($token === null || $token === '') {
 			return null;
 		}
-		$st = $this->pdo->prepare('SELECT id, naam FROM persoon WHERE token_hash = ? AND actief');
+		$st = $this->pdo->prepare('SELECT id, name FROM person WHERE token_hash = ? AND active');
 		$st->execute(array(self::hash($token)));
-		$rij = $st->fetch();
+		$row = $st->fetch();
 
-		return $rij === false ? null : array('id' => (int) $rij['id'], 'naam' => (string) $rij['naam']);
+		return $row === false ? null : array('id' => (int) $row['id'], 'name' => (string) $row['name']);
 	}
 }

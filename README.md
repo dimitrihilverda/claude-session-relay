@@ -14,6 +14,10 @@ and a plugin, so that every session:
 - **is stopped before a colliding git action**: a `git push` when someone else is on that
   branch, a `git commit` when someone else is changing the same files.
 
+One relay can host several **isolated teams**, and you decide per folder which team a session
+joins, or that it is **private** (only your own sessions see it). Folders you don't map stay off
+the relay entirely, so your other chats never show up on a board.
+
 If the relay is down, nothing is blocked: you get a warning and carry on.
 
 ## How it works
@@ -41,8 +45,11 @@ If the relay is down, nothing is blocked: you get a warning and carry on.
 cd server
 cp .env.example .env        # set a strong RELAY_DB_PASS
 docker compose up -d        # relay on port 8080, migrations run automatically
-docker compose exec relay relay person:create Alice   # prints Alice's token once
-docker compose exec relay relay person:create Bob
+docker compose exec relay relay person:create alice   # prints Alice's token once
+docker compose exec relay relay person:create bob
+docker compose exec relay relay team:create acme
+docker compose exec relay relay team:add acme alice
+docker compose exec relay relay team:add acme bob
 ```
 
 Put it behind HTTPS. With [Caddy](https://caddyserver.com) that is one line in a Caddyfile:
@@ -53,9 +60,14 @@ relay.example.com {
 }
 ```
 
-Other commands: `relay person:revoke <name>` (the token stops working), `relay cleanup` (the
-compose file already runs it daily). Running `person:create` again for an existing name issues a
-new token and invalidates the old one.
+Other commands: `relay person:revoke <name>` (the token stops working), `relay team:list`,
+`relay team:rename <old> <new>`, `relay team:remove <team> <person>` (their sessions in that team
+are removed at once), `relay cleanup` (the compose file already runs it daily). Running
+`person:create` again for an existing name issues a new token and invalidates the old one.
+
+A person can be in several teams. Someone who is only in team `acme` cannot see anything of
+another team on the same relay: not its sessions, not its people, not even whether a session
+name exists (the relay answers exactly as for a name that does not exist).
 
 ### 2. Install the plugin (every developer)
 
@@ -64,11 +76,27 @@ In Claude Code:
 ```
 /plugin marketplace add dimitrihilverda/claude-session-relay
 /plugin install session-relay@claude-session-relay
-/session-relay:session setup https://relay.example.com <your-token> <your-name>
 ```
 
-Restart Claude Code. At the start of every session you will see
-"Session relay: this session is alice-myrepo-1a2b", followed by the board.
+Then tell the client about the relay and which folders belong to which team (the client is
+`session-relay` in the plugin's `client/` folder; `/session-relay:session setup` walks you through it):
+
+```
+session-relay relay add acme https://relay.example.com <your-token> alice
+session-relay folder ~/work/acme acme acme        # sessions here join team acme
+session-relay folder ~/hobby acme private         # only my own sessions see these
+session-relay folders
+```
+
+The longest matching folder wins. A session started anywhere else stays off the relay; run
+`session-relay register` there if you want it on after all (private by default). You can add
+several relays, for example one per organisation.
+
+Restart Claude Code. At the start of every session in a mapped folder you will see
+"Session relay: this session is alice-myrepo-1a2b", followed by your team's board.
+
+Coming from the earlier Dutch client (`~/.claude/sessie-relay.json`)? `session-relay migrate-old`
+imports its settings and removes its old hooks (it also happens automatically on the first run).
 
 ### 3. Use it
 
@@ -87,8 +115,8 @@ Open the relay's URL in a browser and enter your token to see the board.
 
 | Action | Blocked when |
 |---|---|
-| `git push` | a live session of **another person** is on the same repository and branch |
-| `git commit` | a live session of **another person** claims (or is changing) one of the files you commit |
+| `git push` | a live session of **another person in the same team** is on the same repository and branch |
+| `git commit` | a live session of **another person in the same team** claims (or is changing) one of the files you commit |
 
 - The repository is recognised by its `origin` remote, so different folder names on different
   machines still match.
@@ -112,6 +140,9 @@ Open the relay's URL in a browser and enter your token to see the board.
 - Tokens are 32 random bytes and are stored only as a SHA-256 hash.
 - Every API call needs a token. A person can only change their own sessions and read their own
   messages, and session names must start with that person's name.
+- Team isolation is enforced on the server, in one SQL rule used by every endpoint; anything you
+  may not see behaves exactly like something that does not exist. Known residuals: message ids
+  are global and sequential, and response timing is not padded.
 - Messages from other sessions are presented to Claude as data, never as instructions.
 
 ## Development
@@ -124,6 +155,9 @@ docker compose -f server/docker-compose.test.yml -p csr run --rm php vendor/bin/
 # client end-to-end tests against a local relay (Windows)
 powershell -NoProfile -ExecutionPolicy Bypass -File tests/client-smoke.ps1
 pwsh -NoProfile -File tests/client-smoke.ps1 -Shell pwsh
+
+# client tests that need no relay
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/client-offline.ps1
 ```
 
 | Path | What |
@@ -133,9 +167,9 @@ pwsh -NoProfile -File tests/client-smoke.ps1 -Shell pwsh
 | `plugin/client/session-relay` | bash wrapper that starts the client (used by the hooks) |
 | `server/` | the relay: PHP without a framework, PostgreSQL, Docker setup |
 
-The relay was first built for a Dutch team, so the API's field names and the server's class
-names are Dutch (`sessie` = session, `bericht` = message, `bord` = board). The client and
-everything you see are in English.
+Databases created by the first (Dutch-named) version of the relay are upgraded in place by
+`relay migrate`; existing people end up in a team called `default` (rename it with
+`team:rename`).
 
 ## License
 

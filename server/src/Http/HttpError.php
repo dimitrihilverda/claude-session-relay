@@ -9,18 +9,18 @@ namespace Relay\Http;
 use RuntimeException;
 
 /**
- * Fout die als HTTP-status met JSON-body naar de client gaat.
+ * Error that goes to the client as an HTTP status with a JSON body.
  * @author Dimitri Hilverda
- * @date 05-10-2026
+ * @date 06-10-2026
  */
 final class HttpError extends RuntimeException
 {
 	/**
 	 * @param int $status
-	 * @param string $bericht Volledige Engelse zin eindigend op een punt.
+	 * @param string $message Full English sentence ending with a period.
 	 */
-	public function __construct(public readonly int $status, string $bericht)
+	public function __construct(public readonly int $status, string $message)
 	{
-		parent::__construct($bericht);
+		parent::__construct($message);
 	}
 }

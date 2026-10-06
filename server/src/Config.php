@@ -5,20 +5,20 @@ declare(strict_types=1);
 namespace Relay;
 
 /**
- * Laadt de database-instellingen: omgevingsvariabelen gaan vóór config.php.
+ * Loads the database settings: environment variables win over config.php.
  * @author Dimitri Hilverda
- * @date 05-10-2026
+ * @date 06-10-2026
  */
 final class Config
 {
 	/**
-	 * @param string $bestand Pad naar config.php (mag ontbreken).
+	 * @param string $file Path to config.php (may be missing).
 	 * @return array{dsn:string,user:string,pass:string}
 	 */
-	public static function laad(string $bestand): array
+	public static function load(string $file): array
 	{
 		//Read the optional config file:
-		$config = is_file($bestand) === true ? require $bestand : array();
+		$config = is_file($file) === true ? require $file : array();
 
 		return array(
 			'dsn' => (string) (getenv('RELAY_DSN') ?: ($config['dsn'] ?? '')),

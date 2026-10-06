@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
 <title>Session board</title>
 <link rel="icon" href="data:,">
 <style>
@@ -18,153 +19,205 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 syst
 header { padding: 24px 16px 8px; max-width: 1200px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; justify-content: space-between; }
 h1 { margin: 0; font-size: 28px; color: var(--head); }
 h1::after { content: ""; display: block; width: 56px; height: 4px; margin-top: 8px; border-radius: 2px; background: var(--accent); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 #status { color: var(--muted); font-size: 14px; }
-#status.fout { color: var(--warn); }
+#status.error { color: var(--warn); }
+#team { padding: 4px 10px; font: inherit; font-size: 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--text); }
 main { max-width: 1200px; margin: 0 auto; padding: 8px 16px 48px; }
-.persoon { margin-top: 24px; }
-.persoon h2 { font-size: 18px; color: var(--head); margin: 0 0 8px; }
-.kaarten { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
-.kaart { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; min-width: 0; }
-.kaart.stil { opacity: 0.6; }
-.naam { font-family: ui-monospace, Consolas, monospace; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.team { margin-top: 32px; }
+.team > h2 { font-size: 22px; color: var(--head); margin: 0 0 4px; }
+.person { margin-top: 16px; }
+.person h3 { font-size: 17px; color: var(--head); margin: 0 0 8px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 12px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; min-width: 0; }
+.card.quiet { opacity: 0.6; }
+.name { font-family: ui-monospace, Consolas, monospace; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
 .repo { font-size: 18px; font-weight: 600; color: var(--head); margin: 4px 0; overflow-wrap: anywhere; }
-.regel { font-size: 14px; color: var(--muted); }
-.branch { font-family: ui-monospace, Consolas, monospace; color: var(--text); }
+.line { font-size: 14px; color: var(--muted); }
+.branch { font-family: ui-monospace, Consolas, monospace; color: var(--text); overflow-wrap: anywhere; }
 .ticket { display: inline-block; padding: 0 8px; border-radius: 999px; background: var(--accent); color: #1f262f; font-size: 13px; font-weight: 600; }
 .claims { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .claim { font-family: ui-monospace, Consolas, monospace; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); overflow-wrap: anywhere; }
-.leeg { color: var(--muted); margin-top: 32px; }
+.empty { color: var(--muted); margin-top: 32px; }
 form { max-width: 520px; margin: 48px auto; padding: 24px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
 form label { display: block; font-weight: 600; color: var(--head); margin-bottom: 8px; }
 form input { width: 100%; padding: 10px 12px; font: inherit; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); }
-form button, #uitloggen { margin-top: 12px; padding: 10px 20px; font: inherit; font-weight: 600; border: 0; border-radius: 999px; background: var(--accent); color: #1f262f; cursor: pointer; }
-#uitloggen { margin-top: 0; padding: 4px 14px; font-size: 13px; background: transparent; border: 1px solid var(--line); color: var(--muted); }
+form button, #forget { margin-top: 12px; padding: 10px 20px; font: inherit; font-weight: 600; border: 0; border-radius: 999px; background: var(--accent); color: #1f262f; cursor: pointer; }
+#forget { margin-top: 0; padding: 4px 14px; font-size: 13px; background: transparent; border: 1px solid var(--line); color: var(--muted); }
 form p { color: var(--muted); font-size: 14px; margin: 12px 0 0; }
 </style>
 </head>
 <body>
 <header>
 	<h1>Session board</h1>
-	<div><span id="status">loading...</span> <button id="uitloggen" hidden>Forget token</button></div>
+	<div class="controls">
+		<select id="team" aria-label="Team" hidden></select>
+		<span id="status">loading...</span>
+		<button id="forget" hidden>Forget token</button>
+	</div>
 </header>
-<main id="inhoud"></main>
-<template id="inlog">
+<main id="content"></main>
+<template id="login">
 	<form id="tokenform">
 		<label for="token">Your relay token</label>
 		<input id="token" type="password" autocomplete="off" required>
 		<button type="submit">Show the board</button>
-		<p>The token stays in this browser only. You see the board of all machines; messages between sessions are not shown here.</p>
+		<p>The token stays in this browser only. You see the sessions of your own teams and your own private sessions; messages are not shown here.</p>
 	</form>
 </template>
 <script>
 (function () {
 	'use strict';
-	var SLEUTEL = 'session-relay-token';
-	var inhoud = document.getElementById('inhoud');
+	var TOKEN_KEY = 'session-relay-token';
+	var TEAM_KEY = 'session-relay-team';
+	var content = document.getElementById('content');
 	var status = document.getElementById('status');
-	var uitloggen = document.getElementById('uitloggen');
+	var forget = document.getElementById('forget');
+	var teamSelect = document.getElementById('team');
 	var timer = null;
 
-	function leesToken() { try { return localStorage.getItem(SLEUTEL); } catch (e) { return null; } }
-	function bewaarToken(t) { try { localStorage.setItem(SLEUTEL, t); } catch (e) {} }
-	function wisToken() { try { localStorage.removeItem(SLEUTEL); } catch (e) {} }
+	function read(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+	function write(key, value) { try { localStorage.setItem(key, value); } catch (e) {} }
+	function remove(key) { try { localStorage.removeItem(key); } catch (e) {} }
 
 	// All data comes from other people's sessions: only ever set it via textContent.
-	function el(tag, klasse, tekst) {
+	function el(tag, cls, text) {
 		var e = document.createElement(tag);
-		if (klasse) { e.className = klasse; }
-		if (tekst !== undefined && tekst !== null) { e.textContent = String(tekst); }
+		if (cls) { e.className = cls; }
+		if (text !== undefined && text !== null) { e.textContent = String(text); }
 		return e;
 	}
 
-	function geleden(iso) {
+	function ago(iso) {
 		var s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
 		if (s < 60) { return s + ' s ago'; }
 		if (s < 3600) { return Math.round(s / 60) + ' min ago'; }
 		return Math.round(s / 3600) + ' h ago';
 	}
 
-	function toonInlog(melding) {
+	function showLogin(message) {
 		if (timer) { clearInterval(timer); timer = null; }
-		uitloggen.hidden = true;
-		inhoud.textContent = '';
-		inhoud.appendChild(document.getElementById('inlog').content.cloneNode(true));
-		status.textContent = melding || '';
-		status.className = melding ? 'fout' : '';
+		forget.hidden = true;
+		teamSelect.hidden = true;
+		content.textContent = '';
+		content.appendChild(document.getElementById('login').content.cloneNode(true));
+		status.textContent = message || '';
+		status.className = message ? 'error' : '';
 		document.getElementById('tokenform').addEventListener('submit', function (ev) {
 			ev.preventDefault();
-			bewaarToken(document.getElementById('token').value.trim());
+			write(TOKEN_KEY, document.getElementById('token').value.trim());
 			start();
 		});
 	}
 
-	function toonBord(sessies) {
-		inhoud.textContent = '';
-		if (!sessies.length) {
-			inhoud.appendChild(el('p', 'leeg', 'No session is active right now.'));
+	// The selector only offers the viewer's own teams (from /me) plus "Private".
+	function fillTeams(teams) {
+		var chosen = read(TEAM_KEY) || '';
+		teamSelect.textContent = '';
+		[['', 'All teams']].concat(teams.map(function (t) { return [t, t]; }), [['private', 'Private']]).forEach(function (o) {
+			var option = el('option', '', o[1]);
+			option.value = o[0];
+			teamSelect.appendChild(option);
+		});
+		if (teams.indexOf(chosen) < 0 && chosen !== 'private') { chosen = ''; }
+		teamSelect.value = chosen;
+		teamSelect.hidden = teams.length < 2;
+	}
+
+	function group(list, key) {
+		var groups = {};
+		var order = [];
+		list.forEach(function (s) {
+			if (!groups[s[key]]) { groups[s[key]] = []; order.push(s[key]); }
+			groups[s[key]].push(s);
+		});
+		return { order: order, groups: groups };
+	}
+
+	function card(s) {
+		var quiet = (Date.now() - Date.parse(s.last_seen)) > 180000;
+		var k = el('article', 'card' + (quiet ? ' quiet' : ''));
+		k.appendChild(el('div', 'name', s.name));
+		k.appendChild(el('div', 'repo', s.repo));
+		var line = el('div', 'line');
+		if (s.branch) { line.appendChild(el('span', 'branch', s.branch)); line.appendChild(document.createTextNode(' ')); }
+		if (s.ticket) { line.appendChild(el('span', 'ticket', s.ticket)); }
+		k.appendChild(line);
+		k.appendChild(el('div', 'line', s.machine + ' · active ' + ago(s.last_seen)));
+		var claim = (Array.isArray(s.claim) ? s.claim : []).filter(Boolean);
+		if (claim.length) {
+			var c = el('div', 'claims');
+			claim.slice(0, 8).forEach(function (p) { c.appendChild(el('span', 'claim', p)); });
+			if (claim.length > 8) { c.appendChild(el('span', 'claim', '+' + (claim.length - 8) + ' more')); }
+			k.appendChild(c);
+		}
+		return k;
+	}
+
+	// Renders exactly the sessions /board returned: per team (Private last), then per person.
+	function showBoard(sessions) {
+		content.textContent = '';
+		if (!sessions.length) {
+			content.appendChild(el('p', 'empty', 'No session is active right now.'));
 			return;
 		}
-		var perPersoon = {};
-		sessies.forEach(function (s) { (perPersoon[s.persoon] = perPersoon[s.persoon] || []).push(s); });
-		Object.keys(perPersoon).sort().forEach(function (persoon) {
-			var blok = el('section', 'persoon');
-			blok.appendChild(el('h2', '', persoon + ' (' + perPersoon[persoon].length + ')'));
-			var kaarten = el('div', 'kaarten');
-			perPersoon[persoon].forEach(function (s) {
-				var stil = (Date.now() - Date.parse(s.laatst_gezien)) > 180000;
-				var k = el('article', 'kaart' + (stil ? ' stil' : ''));
-				k.appendChild(el('div', 'naam', s.naam));
-				k.appendChild(el('div', 'repo', s.repo));
-				var r = el('div', 'regel');
-				if (s.branch) { r.appendChild(el('span', 'branch', s.branch)); r.appendChild(document.createTextNode(' ')); }
-				if (s.ticket) { r.appendChild(el('span', 'ticket', s.ticket)); }
-				k.appendChild(r);
-				k.appendChild(el('div', 'regel', s.machine + ' · active ' + geleden(s.laatst_gezien)));
-				var claim = (s.claim || []).filter(Boolean);
-				if (claim.length) {
-					var c = el('div', 'claims');
-					claim.slice(0, 8).forEach(function (p) { c.appendChild(el('span', 'claim', p)); });
-					if (claim.length > 8) { c.appendChild(el('span', 'claim', '+' + (claim.length - 8) + ' more')); }
-					k.appendChild(c);
-				}
-				kaarten.appendChild(k);
+		var teams = group(sessions, 'team');
+		teams.order.sort(function (a, b) { return (a === 'private') - (b === 'private') || (a < b ? -1 : a > b ? 1 : 0); });
+		teams.order.forEach(function (team) {
+			var section = el('section', 'team');
+			section.appendChild(el('h2', '', team === 'private' ? 'Private' : team));
+			var persons = group(teams.groups[team], 'person');
+			persons.order.sort(function (a, b) { return a.toLowerCase() < b.toLowerCase() ? -1 : 1; });
+			persons.order.forEach(function (person) {
+				var block = el('div', 'person');
+				block.appendChild(el('h3', '', person + ' (' + persons.groups[person].length + ')'));
+				var cards = el('div', 'cards');
+				persons.groups[person].forEach(function (s) { cards.appendChild(card(s)); });
+				block.appendChild(cards);
+				section.appendChild(block);
 			});
-			blok.appendChild(kaarten);
-			inhoud.appendChild(blok);
+			content.appendChild(section);
 		});
 	}
 
-	function haal() {
-		var token = leesToken();
-		if (!token) { toonInlog(); return; }
-		fetch('/bord', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' })
-			.then(function (antw) {
-				if (antw.status === 401) { wisToken(); toonInlog('That token is not valid (any more).'); return null; }
-				if (!antw.ok) { throw new Error('status ' + antw.status); }
-				return antw.json();
+	function refresh() {
+		if (!read(TOKEN_KEY)) { showLogin(); return; }
+		var team = teamSelect.hidden ? '' : teamSelect.value;
+		fetch('/board' + (team ? '?team=' + encodeURIComponent(team) : ''), { headers: { Authorization: 'Bearer ' + read(TOKEN_KEY) }, cache: 'no-store' })
+			.then(function (response) {
+				if (response.status === 401) { remove(TOKEN_KEY); showLogin('That token is not valid (any more).'); return null; }
+				if (!response.ok) { throw new Error('status ' + response.status); }
+				return response.json();
 			})
 			.then(function (data) {
 				if (!data) { return; }
-				uitloggen.hidden = false;
-				toonBord(data.sessies || []);
+				forget.hidden = false;
+				showBoard(Array.isArray(data.sessions) ? data.sessions : []);
 				status.className = '';
 				status.textContent = 'updated ' + new Date().toLocaleTimeString();
 			})
 			.catch(function (e) {
-				status.className = 'fout';
+				status.className = 'error';
 				status.textContent = 'relay unreachable (' + e.message + '), retrying';
 			});
 	}
 
 	function start() {
-		if (!leesToken()) { toonInlog(); return; }
-		inhoud.textContent = '';
-		haal();
-		if (timer) { clearInterval(timer); }
-		timer = setInterval(haal, 5000);
+		if (!read(TOKEN_KEY)) { showLogin(); return; }
+		content.textContent = '';
+		fetch('/me', { headers: { Authorization: 'Bearer ' + read(TOKEN_KEY) }, cache: 'no-store' })
+			.then(function (response) { return response.ok ? response.json() : null; })
+			.then(function (me) { fillTeams(me && Array.isArray(me.teams) ? me.teams : []); })
+			.catch(function () { fillTeams([]); })
+			.then(function () {
+				refresh();
+				if (timer) { clearInterval(timer); }
+				timer = setInterval(refresh, 5000);
+			});
 	}
 
-	uitloggen.addEventListener('click', function () { wisToken(); toonInlog(); });
+	teamSelect.addEventListener('change', function () { write(TEAM_KEY, teamSelect.value); refresh(); });
+	forget.addEventListener('click', function () { remove(TOKEN_KEY); remove(TEAM_KEY); showLogin(); });
 	start();
 }());
 </script>

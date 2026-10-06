@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Relay\Http;
 
 /**
- * JSON-antwoord.
+ * JSON (or HTML) response.
  * @author Dimitri Hilverda
- * @date 05-10-2026
+ * @date 06-10-2026
  */
 final class Response
 {
@@ -23,7 +23,7 @@ final class Response
 	/**
 	 * @return void
 	 */
-	public function stuur(): void
+	public function send(): void
 	{
 		http_response_code($this->status);
 		if($this->status === 204) {
@@ -32,11 +32,14 @@ final class Response
 		if($this->html !== null) {
 			header('Content-Type: text/html; charset=utf-8');
 			header("Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'");
+			header('X-Content-Type-Options: nosniff');
+			header('Referrer-Policy: no-referrer');
 			echo $this->html;
 
 			return;
 		}
 		header('Content-Type: application/json; charset=utf-8');
+		header('Cache-Control: no-store');
 		echo json_encode($this->data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
 	}
 }
