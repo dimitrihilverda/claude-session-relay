@@ -214,6 +214,8 @@ rest of the relay keeps working. Client registration is rate limited (20 per add
 
 ## Privacy and security
 
+Full details: [Privacy](PRIVACY.md).
+
 - Only metadata travels: session names, repository and branch names, file paths and short
   message texts. No code.
 - Tokens are 32 random bytes and are stored only as a SHA-256 hash.

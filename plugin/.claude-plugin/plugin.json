@@ -19,5 +19,6 @@
   ],
   "icon": "./.claude-plugin/icon.png",
   "documentationUrl": "https://github.com/dimitrihilverda/claude-session-relay#readme",
-  "supportUrl": "https://github.com/dimitrihilverda/claude-session-relay/issues"
+  "supportUrl": "https://github.com/dimitrihilverda/claude-session-relay/issues",
+  "privacyPolicyUrl": "https://github.com/dimitrihilverda/claude-session-relay/blob/main/PRIVACY.md"
 }

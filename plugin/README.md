@@ -17,4 +17,6 @@ deletes messages after 14 days.
 Setup, the relay, the cloud connector and the security model:
 https://github.com/dimitrihilverda/claude-session-relay#readme
 
+Privacy: https://github.com/dimitrihilverda/claude-session-relay/blob/main/PRIVACY.md
+
 MIT licence, see LICENSE.
