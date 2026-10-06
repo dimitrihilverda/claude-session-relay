@@ -9,7 +9,7 @@ namespace Relay;
 use PDO;
 
 /**
- * Removes sessions without a heartbeat for 24 hours, messages older than 30 days and expired OAuth rows.
+ * Removes sessions without a heartbeat for 24 hours, messages older than 14 days and expired OAuth rows.
  * @author Dimitri Hilverda
  * @date 06-10-2026
  */
@@ -28,7 +28,7 @@ final class Cleaner
 	public function cleanUp(): array
 	{
 		$sessions = (int) $this->pdo->exec("DELETE FROM session WHERE last_seen < now() - interval '24 hours'");
-		$messages = (int) $this->pdo->exec("DELETE FROM message WHERE created_at < now() - interval '30 days'");
+		$messages = (int) $this->pdo->exec("DELETE FROM message WHERE created_at < now() - interval '14 days'");
 
 		//OAuth: expired codes, token families past their refresh lifetime, and clients nobody uses:
 		$oauth = (int) $this->pdo->exec("DELETE FROM oauth_code WHERE expires_at < now() - interval '1 hour'");

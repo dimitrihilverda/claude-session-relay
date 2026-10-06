@@ -11,7 +11,8 @@ run yourself (PHP + PostgreSQL, Docker setup included) or one your team already 
 **Data it sends** to the relay you configure, and nowhere else: session names, machine name,
 repository and branch names, ticket ids taken from branch names, changed file paths, and the
 short messages sessions exchange. No code or file contents. Nothing is sent from folders you
-have not mapped to a relay.
+have not mapped to a relay. The relay forgets a session 24 hours after its last heartbeat and
+deletes messages after 14 days.
 
 Setup, the relay, the cloud connector and the security model:
 https://github.com/dimitrihilverda/claude-session-relay#readme
