@@ -2,6 +2,7 @@ x-relay-env: &relay-env
   RELAY_DSN: "pgsql:host=db;dbname=relay_test"
   RELAY_DB_USER: relay
   RELAY_DB_PASS: relay
+  RELAY_PUBLIC_URL: "http://localhost:8089"
 
 services:
   db:

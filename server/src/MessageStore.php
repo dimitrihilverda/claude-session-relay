@@ -72,6 +72,30 @@ final class MessageStore
 	}
 
 	/**
+	 * Heartbeat plus inbox with long-poll: on an empty inbox keep asking for at most $wait seconds.
+	 * @param array{id:int,name:string} $person
+	 * @param string $session
+	 * @param int $wait Seconds, already capped by the caller.
+	 * @return list<array<string, mixed>>
+	 * @throws HttpError 404 when it is not my own (visible) session.
+	 */
+	public function poll(array $person, string $session, int $wait): array
+	{
+		//Heartbeat (also checks that the session is mine):
+		$own = (new SessionStore($this->pdo))->heartbeat($person, $session);
+
+		//Poll once per second until something arrives or time is up:
+		$end = microtime(true) + max(0, $wait);
+		while(true) {
+			$list = $this->inbox($person, $own['name']);
+			if($list !== array() || microtime(true) >= $end) {
+				return $list;
+			}
+			usleep(1000000);
+		}
+	}
+
+	/**
 	 * Unread messages for this session; marks them as read straight away.
 	 * @param array{id:int,name:string} $person
 	 * @param string $session Already checked by SessionStore::heartbeat().

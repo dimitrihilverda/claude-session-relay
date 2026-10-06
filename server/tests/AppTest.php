@@ -62,6 +62,44 @@ final class AppTest extends DbTestCase
 	/**
 	 * @return void
 	 */
+	public function testBodyOverOneMegabyteIs413(): void
+	{
+		$token = $this->person('Alice')['token'];
+		foreach(array('/session', '/health', '/oauth/token', '/mcp') as $path) {
+			$response = (new App($this->pdo, 2, 'https://relay.test'))->handle(new Request('POST', $path, array(), null, $token, array(), '', '', true));
+			self::assertSame(413, $response->status);
+			self::assertSame(array('error' => 'Request body too large.'), $response->data);
+		}
+	}
+
+	/**
+	 * Without public_url the OAuth/MCP endpoints refuse, the rest keeps working.
+	 * @return void
+	 */
+	public function testOAuthAndMcpNeedPublicUrl(): void
+	{
+		$token = $this->person('Alice')['token'];
+		$routes = array(
+			array('GET', '/.well-known/oauth-protected-resource'),
+			array('GET', '/.well-known/oauth-protected-resource/mcp'),
+			array('GET', '/.well-known/oauth-authorization-server'),
+			array('POST', '/oauth/register'),
+			array('GET', '/oauth/authorize'),
+			array('POST', '/oauth/token'),
+			array('POST', '/mcp'),
+		);
+		foreach($routes as [$method, $path]) {
+			$response = (new App($this->pdo, 2))->handle(new Request($method, $path, array(), array(), $token));
+			self::assertSame(503, $response->status, $path);
+			self::assertSame(array('error' => 'public_url is not configured'), $response->data);
+		}
+		self::assertSame(200, $this->request('GET', '/health', null)->status);
+		self::assertSame(200, $this->request('GET', '/me', $token)->status);
+	}
+
+	/**
+	 * @return void
+	 */
 	public function testInvalidJsonIs422(): void
 	{
 		$token = $this->person('Alice')['token'];

@@ -34,6 +34,7 @@ final class Auth
 
 	/**
 	 * Creates a person, or gives an existing person a new token (and makes them active again).
+	 * A new token also ends every OAuth grant of the person (connectors must authorize again).
 	 * @param string $name
 	 * @return array{id:int,name:string,token:string}
 	 * @throws InvalidArgumentException
@@ -65,20 +66,37 @@ final class Auth
 			 RETURNING id'
 		);
 		$st->execute(array('name' => $name, 'hash' => self::hash($token)));
+		$id = (int) $st->fetchColumn();
+		$this->revokeOAuth($id);
 
-		return array('id' => (int) $st->fetchColumn(), 'name' => $name, 'token' => $token);
+		return array('id' => $id, 'name' => $name, 'token' => $token);
 	}
 
 	/**
+	 * Revokes the person's relay token and every OAuth token of the person.
 	 * @param string $name
 	 * @return bool Whether the person existed.
 	 */
 	public function revoke(string $name): bool
 	{
-		$st = $this->pdo->prepare('UPDATE person SET active = false WHERE lower(name) = lower(?)');
+		$st = $this->pdo->prepare('UPDATE person SET active = false WHERE lower(name) = lower(?) RETURNING id');
 		$st->execute(array($name));
+		$ids = $st->fetchAll(PDO::FETCH_COLUMN);
+		foreach($ids as $id) {
+			$this->revokeOAuth((int) $id);
+		}
 
-		return $st->rowCount() > 0;
+		return $ids !== array();
+	}
+
+	/**
+	 * @param int $personId
+	 * @return void
+	 */
+	private function revokeOAuth(int $personId): void
+	{
+		$this->pdo->prepare('UPDATE oauth_token SET revoked_at = now() WHERE person_id = ? AND revoked_at IS NULL')->execute(array($personId));
+		$this->pdo->prepare('DELETE FROM oauth_code WHERE person_id = ?')->execute(array($personId));
 	}
 
 	/**

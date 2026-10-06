@@ -9,20 +9,20 @@ namespace Relay\Tests;
 use Relay\Http\Response;
 
 /**
- * Team isolation: Mez (team gti only) must not see or infer anything of team moving-in, and
+ * Team isolation: Carol (team beta only) must not see or infer anything of team acme, and
  * private sessions are invisible to everybody but their own person.
  *
- * Dimitri: moving-in + gti. Chantal: moving-in. Mez: gti.
+ * Alice: acme + beta. Bob: acme. Carol: beta.
  * @author Dimitri Hilverda
  * @date 06-10-2026
  */
 final class IsolationTest extends DbTestCase
 {
-	private string $dimitri;
+	private string $alice;
 
-	private string $chantal;
+	private string $bob;
 
-	private string $mez;
+	private string $carol;
 
 	/**
 	 * @return void
@@ -30,19 +30,19 @@ final class IsolationTest extends DbTestCase
 	protected function setUp(): void
 	{
 		parent::setUp();
-		$this->dimitri = $this->person('dimitri')['token'];
-		$this->chantal = $this->person('chantal')['token'];
-		$this->mez = $this->person('mez')['token'];
-		$this->team('moving-in', 'dimitri', 'chantal');
-		$this->team('gti', 'dimitri', 'mez');
+		$this->alice = $this->person('alice')['token'];
+		$this->bob = $this->person('bob')['token'];
+		$this->carol = $this->person('carol')['token'];
+		$this->team('acme', 'alice', 'bob');
+		$this->team('beta', 'alice', 'carol');
 
 		//Everybody works in the same repo on the same branch, so only the team keeps them apart:
-		$this->register($this->dimitri, 'dimitri-mi', array('team' => 'moving-in', 'claim' => array('src/')));
-		$this->register($this->dimitri, 'dimitri-gti', array('team' => 'gti', 'claim' => array('src/')));
-		$this->register($this->dimitri, 'dimitri-priv', array('team' => 'private', 'claim' => array('src/')));
-		$this->register($this->chantal, 'chantal-mi', array('team' => 'moving-in', 'claim' => array('src/')));
-		$this->register($this->mez, 'mez-gti', array('team' => 'gti', 'claim' => array('src/')));
-		$this->register($this->mez, 'mez-priv', array('team' => 'private', 'claim' => array('src/')));
+		$this->register($this->alice, 'alice-mi', array('team' => 'acme', 'claim' => array('src/')));
+		$this->register($this->alice, 'alice-beta', array('team' => 'beta', 'claim' => array('src/')));
+		$this->register($this->alice, 'alice-priv', array('team' => 'private', 'claim' => array('src/')));
+		$this->register($this->bob, 'bob-mi', array('team' => 'acme', 'claim' => array('src/')));
+		$this->register($this->carol, 'carol-beta', array('team' => 'beta', 'claim' => array('src/')));
+		$this->register($this->carol, 'carol-priv', array('team' => 'private', 'claim' => array('src/')));
 	}
 
 	/**
@@ -102,12 +102,12 @@ final class IsolationTest extends DbTestCase
 	 */
 	public function testBoardOfMezShowsOnlyGtiAndHisOwnPrivateSessions(): void
 	{
-		$response = $this->request('GET', '/board', $this->mez);
-		self::assertSame(array('dimitri-gti', 'mez-gti', 'mez-priv'), array_column($response->data['sessions'], 'name'));
-		self::assertSame(array('gti', 'gti', 'private'), array_column($response->data['sessions'], 'team'));
-		self::assertStringNotContainsString('moving-in', (string) json_encode($response->data));
-		self::assertStringNotContainsString('chantal', strtolower((string) json_encode($response->data)));
-		self::assertStringNotContainsString('dimitri-mi', (string) json_encode($response->data));
+		$response = $this->request('GET', '/board', $this->carol);
+		self::assertSame(array('alice-beta', 'carol-beta', 'carol-priv'), array_column($response->data['sessions'], 'name'));
+		self::assertSame(array('beta', 'beta', 'private'), array_column($response->data['sessions'], 'team'));
+		self::assertStringNotContainsString('acme', (string) json_encode($response->data));
+		self::assertStringNotContainsString('bob', strtolower((string) json_encode($response->data)));
+		self::assertStringNotContainsString('alice-mi', (string) json_encode($response->data));
 	}
 
 	/**
@@ -115,9 +115,9 @@ final class IsolationTest extends DbTestCase
 	 */
 	public function testBoardFilterOnForeignTeamLooksLikeUnknownTeam(): void
 	{
-		self::assertSame(array(), $this->board($this->mez, array('team' => 'moving-in')));
-		self::assertSame(array(), $this->board($this->mez, array('team' => 'no-such-team')));
-		self::assertSame(array('mez-priv'), $this->board($this->mez, array('team' => 'private')));
+		self::assertSame(array(), $this->board($this->carol, array('team' => 'acme')));
+		self::assertSame(array(), $this->board($this->carol, array('team' => 'no-such-team')));
+		self::assertSame(array('carol-priv'), $this->board($this->carol, array('team' => 'private')));
 	}
 
 	/**
@@ -125,8 +125,8 @@ final class IsolationTest extends DbTestCase
 	 */
 	public function testBoardOfOthers(): void
 	{
-		self::assertSame(array('chantal-mi', 'dimitri-mi'), $this->board($this->chantal));
-		self::assertSame(array('dimitri-gti', 'mez-gti', 'chantal-mi', 'dimitri-mi', 'dimitri-priv'), $this->board($this->dimitri));
+		self::assertSame(array('alice-mi', 'bob-mi'), $this->board($this->bob));
+		self::assertSame(array('alice-mi', 'bob-mi', 'alice-beta', 'carol-beta', 'alice-priv'), $this->board($this->alice));
 	}
 
 	/**
@@ -136,13 +136,13 @@ final class IsolationTest extends DbTestCase
 	{
 		$body = array('repo_base' => 'app', 'branch' => 'test', 'paths' => array('src/a.ts'));
 
-		$mez = $this->request('POST', '/check', $this->mez, array('session' => 'mez-gti') + $body)->data['conflicts'];
-		self::assertSame(array('dimitri-gti'), array_column($mez, 'session'));
+		$carol = $this->request('POST', '/check', $this->carol, array('session' => 'carol-beta') + $body)->data['conflicts'];
+		self::assertSame(array('alice-beta'), array_column($carol, 'session'));
 
-		self::assertSame(array(), $this->request('POST', '/check', $this->mez, array('session' => 'mez-priv') + $body)->data['conflicts']);
+		self::assertSame(array(), $this->request('POST', '/check', $this->carol, array('session' => 'carol-priv') + $body)->data['conflicts']);
 
-		$chantal = $this->request('POST', '/check', $this->chantal, array('session' => 'chantal-mi') + $body)->data['conflicts'];
-		self::assertSame(array('dimitri-mi'), array_column($chantal, 'session'));
+		$bob = $this->request('POST', '/check', $this->bob, array('session' => 'bob-mi') + $body)->data['conflicts'];
+		self::assertSame(array('alice-mi'), array_column($bob, 'session'));
 	}
 
 	/**
@@ -152,8 +152,8 @@ final class IsolationTest extends DbTestCase
 	{
 		$body = array('repo_base' => 'app', 'branch' => 'test', 'paths' => array());
 		self::assertSameAsMissing(
-			$this->request('POST', '/check', $this->mez, array('session' => 'dimitri-mi') + $body),
-			$this->request('POST', '/check', $this->mez, array('session' => 'dimitri-nothing') + $body)
+			$this->request('POST', '/check', $this->carol, array('session' => 'alice-mi') + $body),
+			$this->request('POST', '/check', $this->carol, array('session' => 'alice-nothing') + $body)
 		);
 	}
 
@@ -162,21 +162,21 @@ final class IsolationTest extends DbTestCase
 	 */
 	public function testMessageToMovingInLooksLikeUnknownRecipient(): void
 	{
-		$missingSession = $this->message($this->mez, 'mez-gti', 'nobody-1');
-		$missingPerson = $this->message($this->mez, 'mez-gti', 'nobody');
+		$missingSession = $this->message($this->carol, 'carol-beta', 'nobody-1');
+		$missingPerson = $this->message($this->carol, 'carol-beta', 'nobody');
 		self::assertSame($missingSession->data, $missingPerson->data);
 
-		self::assertSameAsMissing($this->message($this->mez, 'mez-gti', 'chantal-mi'), $missingSession);
-		self::assertSameAsMissing($this->message($this->mez, 'mez-gti', 'dimitri-mi'), $missingSession);
-		self::assertSameAsMissing($this->message($this->mez, 'mez-gti', 'chantal'), $missingPerson);
-		self::assertSameAsMissing($this->message($this->mez, 'mez-gti', 'CHANTAL'), $missingPerson);
-		self::assertSameAsMissing($this->message($this->mez, 'mez-gti', 'dimitri-priv'), $missingSession);
-		self::assertSameAsMissing($this->message($this->mez, 'mez-gti', 'chantal-mi', 'question'), $missingSession);
+		self::assertSameAsMissing($this->message($this->carol, 'carol-beta', 'bob-mi'), $missingSession);
+		self::assertSameAsMissing($this->message($this->carol, 'carol-beta', 'alice-mi'), $missingSession);
+		self::assertSameAsMissing($this->message($this->carol, 'carol-beta', 'bob'), $missingPerson);
+		self::assertSameAsMissing($this->message($this->carol, 'carol-beta', 'BOB'), $missingPerson);
+		self::assertSameAsMissing($this->message($this->carol, 'carol-beta', 'alice-priv'), $missingSession);
+		self::assertSameAsMissing($this->message($this->carol, 'carol-beta', 'bob-mi', 'question'), $missingSession);
 		self::assertSame(0, (int) $this->pdo->query('SELECT count(*) FROM message')->fetchColumn());
 
-		//What Mez may reach in gti:
-		self::assertSame(201, $this->message($this->mez, 'mez-gti', 'dimitri-gti')->status);
-		self::assertSame(201, $this->message($this->mez, 'mez-gti', 'dimitri')->status);
+		//What Carol may reach in beta:
+		self::assertSame(201, $this->message($this->carol, 'carol-beta', 'alice-beta')->status);
+		self::assertSame(201, $this->message($this->carol, 'carol-beta', 'alice')->status);
 	}
 
 	/**
@@ -184,15 +184,15 @@ final class IsolationTest extends DbTestCase
 	 */
 	public function testMessageStaysInsideTheFromSessionsTeam(): void
 	{
-		//Dimitri may see both sessions, but a message never crosses teams:
-		$missing = $this->message($this->dimitri, 'dimitri-gti', 'nobody-1');
-		self::assertSameAsMissing($this->message($this->dimitri, 'dimitri-gti', 'chantal-mi'), $missing);
-		self::assertSameAsMissing($this->message($this->dimitri, 'dimitri-gti', 'chantal'), $missing);
-		self::assertSameAsMissing($this->message($this->dimitri, 'dimitri-mi', 'mez-gti'), $missing);
-		self::assertSameAsMissing($this->message($this->dimitri, 'dimitri-mi', 'mez'), $missing);
-		self::assertSameAsMissing($this->message($this->dimitri, 'dimitri-gti', 'dimitri-mi'), $missing);
-		self::assertSameAsMissing($this->message($this->dimitri, 'dimitri-priv', 'dimitri-gti'), $missing);
-		self::assertSameAsMissing($this->message($this->mez, 'mez-gti', 'mez-priv'), $missing);
+		//Alice may see both sessions, but a message never crosses teams:
+		$missing = $this->message($this->alice, 'alice-beta', 'nobody-1');
+		self::assertSameAsMissing($this->message($this->alice, 'alice-beta', 'bob-mi'), $missing);
+		self::assertSameAsMissing($this->message($this->alice, 'alice-beta', 'bob'), $missing);
+		self::assertSameAsMissing($this->message($this->alice, 'alice-mi', 'carol-beta'), $missing);
+		self::assertSameAsMissing($this->message($this->alice, 'alice-mi', 'carol'), $missing);
+		self::assertSameAsMissing($this->message($this->alice, 'alice-beta', 'alice-mi'), $missing);
+		self::assertSameAsMissing($this->message($this->alice, 'alice-priv', 'alice-beta'), $missing);
+		self::assertSameAsMissing($this->message($this->carol, 'carol-beta', 'carol-priv'), $missing);
 	}
 
 	/**
@@ -200,8 +200,8 @@ final class IsolationTest extends DbTestCase
 	 */
 	public function testFromForeignSessionLooksLikeUnknownSession(): void
 	{
-		self::assertSameAsMissing($this->message($this->mez, 'dimitri-mi', 'mez-gti'), $this->message($this->mez, 'dimitri-nothing', 'mez-gti'));
-		self::assertSameAsMissing($this->message($this->mez, 'dimitri-gti', 'mez-gti'), $this->message($this->mez, 'dimitri-nothing', 'mez-gti'));
+		self::assertSameAsMissing($this->message($this->carol, 'alice-mi', 'carol-beta'), $this->message($this->carol, 'alice-nothing', 'carol-beta'));
+		self::assertSameAsMissing($this->message($this->carol, 'alice-beta', 'carol-beta'), $this->message($this->carol, 'alice-nothing', 'carol-beta'));
 	}
 
 	/**
@@ -209,13 +209,13 @@ final class IsolationTest extends DbTestCase
 	 */
 	public function testAnswerToMovingInMessageLooksLikeUnknownMessage(): void
 	{
-		$question = $this->request('POST', '/message', $this->dimitri, array('from' => 'dimitri-mi', 'to' => 'chantal', 'kind' => 'question', 'text' => 'secret?'))->data['id'];
-		$answer = fn(int $id): Response => $this->request('POST', '/message', $this->mez, array('from' => 'mez-gti', 'kind' => 'answer', 'reply_to' => $id, 'text' => 'x'));
+		$question = $this->request('POST', '/message', $this->alice, array('from' => 'alice-mi', 'to' => 'bob', 'kind' => 'question', 'text' => 'secret?'))->data['id'];
+		$answer = fn(int $id): Response => $this->request('POST', '/message', $this->carol, array('from' => 'carol-beta', 'kind' => 'answer', 'reply_to' => $id, 'text' => 'x'));
 
 		self::assertSameAsMissing($answer($question), $answer($question + 1000));
 
-		//Dimitri himself cannot answer it from another team either:
-		$fromGti = $this->request('POST', '/message', $this->dimitri, array('from' => 'dimitri-gti', 'kind' => 'answer', 'reply_to' => $question, 'text' => 'x'));
+		//Alice himself cannot answer it from another team either:
+		$fromGti = $this->request('POST', '/message', $this->alice, array('from' => 'alice-beta', 'kind' => 'answer', 'reply_to' => $question, 'text' => 'x'));
 		self::assertSameAsMissing($fromGti, $answer($question + 1000));
 	}
 
@@ -225,13 +225,13 @@ final class IsolationTest extends DbTestCase
 	public function testRegisteringInForeignTeamLooksLikeUnknownTeam(): void
 	{
 		$body = fn(string $name, string $team): array => array('name' => $name, 'team' => $team, 'machine' => 'pc', 'repo' => 'app', 'repo_base' => 'app');
-		$missing = $this->request('POST', '/session', $this->mez, $body('mez-2', 'no-such-team'));
+		$missing = $this->request('POST', '/session', $this->carol, $body('carol-2', 'no-such-team'));
 		self::assertSame(array('error' => 'Unknown team.'), $missing->data);
 
-		self::assertSameAsMissing($this->request('POST', '/session', $this->mez, $body('mez-2', 'moving-in')), $missing);
-		self::assertSameAsMissing($this->request('POST', '/session', $this->mez, $body('mez-gti', 'moving-in')), $missing);
-		self::assertSame(array('mez-gti', 'mez-priv'), array_column(
-			$this->pdo->query("SELECT name FROM session WHERE person_id = (SELECT id FROM person WHERE name = 'mez') ORDER BY name")->fetchAll(),
+		self::assertSameAsMissing($this->request('POST', '/session', $this->carol, $body('carol-2', 'acme')), $missing);
+		self::assertSameAsMissing($this->request('POST', '/session', $this->carol, $body('carol-beta', 'acme')), $missing);
+		self::assertSame(array('carol-beta', 'carol-priv'), array_column(
+			$this->pdo->query("SELECT name FROM session WHERE person_id = (SELECT id FROM person WHERE name = 'carol') ORDER BY name")->fetchAll(),
 			'name'
 		));
 	}
@@ -241,18 +241,18 @@ final class IsolationTest extends DbTestCase
 	 */
 	public function testReRegisteringForeignSessionNameLooksLikeUnknownName(): void
 	{
-		$body = fn(string $name): array => array('name' => $name, 'team' => 'gti', 'machine' => 'pc', 'repo' => 'app', 'repo_base' => 'app');
-		$missing = $this->request('POST', '/session', $this->mez, $body('dimitri-nothing'));
+		$body = fn(string $name): array => array('name' => $name, 'team' => 'beta', 'machine' => 'pc', 'repo' => 'app', 'repo_base' => 'app');
+		$missing = $this->request('POST', '/session', $this->carol, $body('alice-nothing'));
 
-		self::assertSameAsMissing($this->request('POST', '/session', $this->mez, $body('dimitri-mi')), $missing);
-		self::assertSameAsMissing($this->request('POST', '/session', $this->mez, $body('dimitri-priv')), $missing);
-		self::assertSameAsMissing($this->request('POST', '/session', $this->mez, $body('chantal-mi')), $missing);
+		self::assertSameAsMissing($this->request('POST', '/session', $this->carol, $body('alice-mi')), $missing);
+		self::assertSameAsMissing($this->request('POST', '/session', $this->carol, $body('alice-priv')), $missing);
+		self::assertSameAsMissing($this->request('POST', '/session', $this->carol, $body('bob-mi')), $missing);
 
 		//A teammate's session may be called taken:
-		self::assertSame(409, $this->request('POST', '/session', $this->mez, $body('dimitri-gti'))->status);
+		self::assertSame(409, $this->request('POST', '/session', $this->carol, $body('alice-beta'))->status);
 
 		//And nothing was changed:
-		self::assertSame('moving-in', $this->pdo->query("SELECT team FROM session WHERE name = 'dimitri-mi'")->fetchColumn());
+		self::assertSame('acme', $this->pdo->query("SELECT team FROM session WHERE name = 'alice-mi'")->fetchColumn());
 	}
 
 	/**
@@ -260,9 +260,9 @@ final class IsolationTest extends DbTestCase
 	 */
 	public function testDeletingForeignSessionLooksLikeUnknownName(): void
 	{
-		$missing = $this->request('DELETE', '/session/dimitri-nothing', $this->mez);
-		self::assertSameAsMissing($this->request('DELETE', '/session/dimitri-mi', $this->mez), $missing);
-		self::assertSameAsMissing($this->request('DELETE', '/session/dimitri-priv', $this->chantal), $this->request('DELETE', '/session/dimitri-nothing', $this->chantal));
+		$missing = $this->request('DELETE', '/session/alice-nothing', $this->carol);
+		self::assertSameAsMissing($this->request('DELETE', '/session/alice-mi', $this->carol), $missing);
+		self::assertSameAsMissing($this->request('DELETE', '/session/alice-priv', $this->bob), $this->request('DELETE', '/session/alice-nothing', $this->bob));
 		self::assertSame(6, (int) $this->pdo->query('SELECT count(*) FROM session')->fetchColumn());
 	}
 
@@ -271,14 +271,14 @@ final class IsolationTest extends DbTestCase
 	 */
 	public function testInboxOfForeignSessionLooksLikeUnknownName(): void
 	{
-		$this->message($this->chantal, 'chantal-mi', 'dimitri-mi');
+		$this->message($this->bob, 'bob-mi', 'alice-mi');
 		$inbox = fn(string $token, string $session): Response => $this->request('GET', '/inbox', $token, array(), array('session' => $session));
 
-		self::assertSameAsMissing($inbox($this->mez, 'dimitri-mi'), $inbox($this->mez, 'dimitri-nothing'));
-		self::assertSameAsMissing($inbox($this->chantal, 'dimitri-priv'), $inbox($this->chantal, 'dimitri-nothing'));
+		self::assertSameAsMissing($inbox($this->carol, 'alice-mi'), $inbox($this->carol, 'alice-nothing'));
+		self::assertSameAsMissing($inbox($this->bob, 'alice-priv'), $inbox($this->bob, 'alice-nothing'));
 
-		//And the message is still unread for Dimitri:
-		self::assertSame(array('hi'), $this->inbox($this->dimitri, 'dimitri-mi'));
+		//And the message is still unread for Alice:
+		self::assertSame(array('hi'), $this->inbox($this->alice, 'alice-mi'));
 	}
 
 	/**
@@ -286,20 +286,20 @@ final class IsolationTest extends DbTestCase
 	 */
 	public function testPersonMessageStaysInItsTeam(): void
 	{
-		$this->register($this->dimitri, 'dimitri-gti2', array('team' => 'gti'));
-		$this->register($this->dimitri, 'dimitri-mi2', array('team' => 'moving-in'));
-		$send = fn(string $token, string $from, string $text): int => $this->request('POST', '/message', $token, array('from' => $from, 'to' => 'dimitri', 'kind' => 'note', 'text' => $text))->status;
+		$this->register($this->alice, 'alice-gti2', array('team' => 'beta'));
+		$this->register($this->alice, 'alice-mi2', array('team' => 'acme'));
+		$send = fn(string $token, string $from, string $text): int => $this->request('POST', '/message', $token, array('from' => $from, 'to' => 'alice', 'kind' => 'note', 'text' => $text))->status;
 
-		self::assertSame(201, $send($this->dimitri, 'dimitri-gti', 'from gti'));
-		self::assertSame(201, $send($this->dimitri, 'dimitri-mi', 'from moving-in'));
-		self::assertSame(201, $send($this->mez, 'mez-gti', 'from mez'));
-		self::assertSame(201, $send($this->dimitri, 'dimitri-priv', 'from private'));
+		self::assertSame(201, $send($this->alice, 'alice-beta', 'from beta'));
+		self::assertSame(201, $send($this->alice, 'alice-mi', 'from acme'));
+		self::assertSame(201, $send($this->carol, 'carol-beta', 'from carol'));
+		self::assertSame(201, $send($this->alice, 'alice-priv', 'from private'));
 
-		self::assertSame(array('from moving-in'), $this->inbox($this->dimitri, 'dimitri-mi2'));
-		self::assertSame(array('from gti', 'from mez'), $this->inbox($this->dimitri, 'dimitri-gti2'));
-		self::assertSame(array('from mez'), $this->inbox($this->dimitri, 'dimitri-gti'));
-		self::assertSame(array(), $this->inbox($this->dimitri, 'dimitri-mi'));
-		self::assertSame(array(), $this->inbox($this->dimitri, 'dimitri-priv'));
+		self::assertSame(array('from acme'), $this->inbox($this->alice, 'alice-mi2'));
+		self::assertSame(array('from beta', 'from carol'), $this->inbox($this->alice, 'alice-gti2'));
+		self::assertSame(array('from carol'), $this->inbox($this->alice, 'alice-beta'));
+		self::assertSame(array(), $this->inbox($this->alice, 'alice-mi'));
+		self::assertSame(array(), $this->inbox($this->alice, 'alice-priv'));
 	}
 
 	/**
@@ -307,21 +307,21 @@ final class IsolationTest extends DbTestCase
 	 */
 	public function testPrivateSessionsAreInvisibleToTeammates(): void
 	{
-		//Chantal shares moving-in with Dimitri, Mez shares gti, neither sees dimitri-priv:
-		self::assertNotContains('dimitri-priv', $this->board($this->chantal));
-		self::assertNotContains('dimitri-priv', $this->board($this->mez));
-		self::assertNotContains('mez-priv', $this->board($this->dimitri));
+		//Bob shares acme with Alice, Carol shares beta, neither sees alice-priv:
+		self::assertNotContains('alice-priv', $this->board($this->bob));
+		self::assertNotContains('alice-priv', $this->board($this->carol));
+		self::assertNotContains('carol-priv', $this->board($this->alice));
 
-		$missing = $this->message($this->chantal, 'chantal-mi', 'nobody-1');
-		self::assertSameAsMissing($this->message($this->chantal, 'chantal-mi', 'dimitri-priv'), $missing);
+		$missing = $this->message($this->bob, 'bob-mi', 'nobody-1');
+		self::assertSameAsMissing($this->message($this->bob, 'bob-mi', 'alice-priv'), $missing);
 
 		$body = array('repo_base' => 'app', 'branch' => 'test', 'paths' => array('src/a.ts'));
-		self::assertNotContains('dimitri-priv', array_column($this->request('POST', '/check', $this->chantal, array('session' => 'chantal-mi') + $body)->data['conflicts'], 'session'));
-		self::assertSame(array(), $this->request('POST', '/check', $this->dimitri, array('session' => 'dimitri-priv') + $body)->data['conflicts']);
+		self::assertNotContains('alice-priv', array_column($this->request('POST', '/check', $this->bob, array('session' => 'bob-mi') + $body)->data['conflicts'], 'session'));
+		self::assertSame(array(), $this->request('POST', '/check', $this->alice, array('session' => 'alice-priv') + $body)->data['conflicts']);
 
 		//A private session may only reach its own person:
-		self::assertSameAsMissing($this->message($this->dimitri, 'dimitri-priv', 'chantal'), $missing);
-		self::assertSame(201, $this->message($this->dimitri, 'dimitri-priv', 'dimitri')->status);
+		self::assertSameAsMissing($this->message($this->alice, 'alice-priv', 'bob'), $missing);
+		self::assertSame(201, $this->message($this->alice, 'alice-priv', 'alice')->status);
 	}
 
 	/**
@@ -330,34 +330,34 @@ final class IsolationTest extends DbTestCase
 	 */
 	public function testSessionMovedToAnotherTeamLeavesClaimAndHistoryBehind(): void
 	{
-		$this->register($this->dimitri, 'dimitri-x', array('team' => 'moving-in', 'claim' => array('secret/moving-in-plan.md')));
-		$this->message($this->chantal, 'chantal-mi', 'dimitri-x');
-		$this->pdo->exec("UPDATE session SET started_at = now() - interval '1 hour' WHERE name = 'dimitri-x'");
+		$this->register($this->alice, 'alice-x', array('team' => 'acme', 'claim' => array('secret/acme-plan.md')));
+		$this->message($this->bob, 'bob-mi', 'alice-x');
+		$this->pdo->exec("UPDATE session SET started_at = now() - interval '1 hour' WHERE name = 'alice-x'");
 		$this->pdo->exec("UPDATE message SET created_at = now() - interval '1 minute'");
 
-		//Heartbeat into gti without a claim:
-		$moved = $this->request('POST', '/session', $this->dimitri, array('name' => 'dimitri-x', 'team' => 'gti', 'machine' => 'pc', 'repo' => 'app', 'repo_base' => 'app'));
+		//Heartbeat into beta without a claim:
+		$moved = $this->request('POST', '/session', $this->alice, array('name' => 'alice-x', 'team' => 'beta', 'machine' => 'pc', 'repo' => 'app', 'repo_base' => 'app'));
 		self::assertSame(200, $moved->status);
 		self::assertSame(array(), $moved->data['session']['claim']);
 
-		$seen = array_values(array_filter($this->request('GET', '/board', $this->mez)->data['sessions'], static fn(array $s): bool => $s['name'] === 'dimitri-x'));
+		$seen = array_values(array_filter($this->request('GET', '/board', $this->carol)->data['sessions'], static fn(array $s): bool => $s['name'] === 'alice-x'));
 		self::assertSame(array(), $seen[0]['claim']);
-		self::assertStringNotContainsString('secret', (string) json_encode($this->request('GET', '/board', $this->mez)->data));
-		$age = (int) $this->pdo->query("SELECT extract(epoch FROM now() - started_at) FROM session WHERE name = 'dimitri-x'")->fetchColumn();
+		self::assertStringNotContainsString('secret', (string) json_encode($this->request('GET', '/board', $this->carol)->data));
+		$age = (int) $this->pdo->query("SELECT extract(epoch FROM now() - started_at) FROM session WHERE name = 'alice-x'")->fetchColumn();
 		self::assertLessThan(5, $age);
 
-		$conflicts = $this->request('POST', '/check', $this->mez, array('session' => 'mez-gti', 'repo_base' => 'app', 'branch' => 'other', 'paths' => array('secret/moving-in-plan.md')))->data['conflicts'];
+		$conflicts = $this->request('POST', '/check', $this->carol, array('session' => 'carol-beta', 'repo_base' => 'app', 'branch' => 'other', 'paths' => array('secret/acme-plan.md')))->data['conflicts'];
 		self::assertSame(array(), $conflicts);
 
 		//A claim sent along with the move is used:
-		$withClaim = $this->register($this->dimitri, 'dimitri-y', array('team' => 'moving-in', 'claim' => array('a/')));
+		$withClaim = $this->register($this->alice, 'alice-y', array('team' => 'acme', 'claim' => array('a/')));
 		self::assertSame(array('a/'), $withClaim['claim']);
-		self::assertSame(array('b/'), $this->register($this->dimitri, 'dimitri-y', array('team' => 'gti', 'claim' => array('b/')))['claim']);
+		self::assertSame(array('b/'), $this->register($this->alice, 'alice-y', array('team' => 'beta', 'claim' => array('b/')))['claim']);
 
 		//Same team without claim still keeps it:
-		$this->request('POST', '/session', $this->dimitri, array('name' => 'dimitri-y', 'machine' => 'pc', 'repo' => 'app', 'repo_base' => 'app'));
-		self::assertSame(array('b/'), $this->register($this->dimitri, 'dimitri-y', array('team' => 'gti', 'claim' => array('b/')))['claim']);
-		self::assertSame(array('b/'), $this->request('POST', '/session', $this->dimitri, array('name' => 'dimitri-y', 'team' => 'gti', 'machine' => 'pc', 'repo' => 'app', 'repo_base' => 'app'))->data['session']['claim']);
+		$this->request('POST', '/session', $this->alice, array('name' => 'alice-y', 'machine' => 'pc', 'repo' => 'app', 'repo_base' => 'app'));
+		self::assertSame(array('b/'), $this->register($this->alice, 'alice-y', array('team' => 'beta', 'claim' => array('b/')))['claim']);
+		self::assertSame(array('b/'), $this->request('POST', '/session', $this->alice, array('name' => 'alice-y', 'team' => 'beta', 'machine' => 'pc', 'repo' => 'app', 'repo_base' => 'app'))->data['session']['claim']);
 	}
 
 	/**
@@ -367,19 +367,19 @@ final class IsolationTest extends DbTestCase
 	public function testSessionLimitIsPerPerson(): void
 	{
 		for($i = 0; $i < 28; $i++) {
-			$this->register($this->mez, "mez-n$i", array('team' => 'gti'));
+			$this->register($this->carol, "carol-n$i", array('team' => 'beta'));
 		}
-		$tooMany = $this->request('POST', '/session', $this->mez, array('name' => 'mez-extra', 'team' => 'gti', 'machine' => 'pc', 'repo' => 'app', 'repo_base' => 'app'));
+		$tooMany = $this->request('POST', '/session', $this->carol, array('name' => 'carol-extra', 'team' => 'beta', 'machine' => 'pc', 'repo' => 'app', 'repo_base' => 'app'));
 		self::assertSame(422, $tooMany->status);
 		self::assertSame(array('error' => 'Too many sessions.'), $tooMany->data);
 
 		//Existing sessions keep their heartbeat, other persons are not affected:
-		self::assertSame(200, $this->request('POST', '/session', $this->mez, array('name' => 'mez-n0', 'machine' => 'pc', 'repo' => 'app', 'repo_base' => 'app'))->status);
-		$this->register($this->dimitri, 'dimitri-new', array('team' => 'gti'));
+		self::assertSame(200, $this->request('POST', '/session', $this->carol, array('name' => 'carol-n0', 'machine' => 'pc', 'repo' => 'app', 'repo_base' => 'app'))->status);
+		$this->register($this->alice, 'alice-new', array('team' => 'beta'));
 
 		//Expired sessions do not count:
-		$this->pdo->exec("UPDATE session SET last_seen = now() - interval '11 minutes' WHERE name = 'mez-n1'");
-		$this->register($this->mez, 'mez-extra', array('team' => 'gti'));
+		$this->pdo->exec("UPDATE session SET last_seen = now() - interval '11 minutes' WHERE name = 'carol-n1'");
+		$this->register($this->carol, 'carol-extra', array('team' => 'beta'));
 	}
 
 	/**
@@ -387,9 +387,9 @@ final class IsolationTest extends DbTestCase
 	 */
 	public function testMeListsOnlyOwnTeams(): void
 	{
-		self::assertSame(array('person' => 'mez', 'teams' => array('gti')), $this->request('GET', '/me', $this->mez)->data);
-		self::assertSame(array('person' => 'chantal', 'teams' => array('moving-in')), $this->request('GET', '/me', $this->chantal)->data);
-		self::assertSame(array('person' => 'dimitri', 'teams' => array('gti', 'moving-in')), $this->request('GET', '/me', $this->dimitri)->data);
+		self::assertSame(array('person' => 'carol', 'teams' => array('beta')), $this->request('GET', '/me', $this->carol)->data);
+		self::assertSame(array('person' => 'bob', 'teams' => array('acme')), $this->request('GET', '/me', $this->bob)->data);
+		self::assertSame(array('person' => 'alice', 'teams' => array('acme', 'beta')), $this->request('GET', '/me', $this->alice)->data);
 	}
 
 	/**

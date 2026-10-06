@@ -15,11 +15,12 @@ require __DIR__ . '/../bootstrap.php';
 set_time_limit(60);
 
 try {
-	$pdo = Db::connect(Config::load(__DIR__ . '/../config.php'));
+	$config = Config::load(__DIR__ . '/../config.php');
+	$pdo = Db::connect($config);
 } catch(Throwable $error) {
 	error_log('session-relay: database unreachable: ' . $error->getMessage());
 	(new Response(503, array('error' => 'Database unreachable.')))->send();
 	exit;
 }
 
-(new App($pdo))->handle(Request::fromGlobals())->send();
+(new App($pdo, 25, $config['public_url']))->handle(Request::fromGlobals())->send();

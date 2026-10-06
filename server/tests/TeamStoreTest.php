@@ -34,14 +34,14 @@ final class TeamStoreTest extends DbTestCase
 	 */
 	public function testCreateAddAndList(): void
 	{
-		$this->teams->create('gti');
-		$this->teams->create('moving-in');
-		$this->teams->add('gti', 'alice');
-		$this->teams->add('gti', 'Bob');
-		$this->teams->add('gti', 'Bob');
+		$this->teams->create('beta');
+		$this->teams->create('acme');
+		$this->teams->add('beta', 'alice');
+		$this->teams->add('beta', 'Bob');
+		$this->teams->add('beta', 'Bob');
 
 		self::assertSame(
-			array(array('name' => 'gti', 'members' => array('Alice', 'Bob')), array('name' => 'moving-in', 'members' => array())),
+			array(array('name' => 'acme', 'members' => array()), array('name' => 'beta', 'members' => array('Alice', 'Bob'))),
 			$this->teams->list()
 		);
 	}
@@ -70,9 +70,9 @@ final class TeamStoreTest extends DbTestCase
 	 */
 	public function testDuplicateTeam(): void
 	{
-		$this->teams->create('gti');
+		$this->teams->create('beta');
 		$this->expectException(InvalidArgumentException::class);
-		$this->teams->create('gti');
+		$this->teams->create('beta');
 	}
 
 	/**
@@ -80,8 +80,8 @@ final class TeamStoreTest extends DbTestCase
 	 */
 	public function testUnknownTeamOrPerson(): void
 	{
-		$this->teams->create('gti');
-		foreach(array(array('nope', 'Alice'), array('gti', 'Nobody')) as [$team, $person]) {
+		$this->teams->create('beta');
+		foreach(array(array('nope', 'Alice'), array('beta', 'Nobody')) as [$team, $person]) {
 			try {
 				$this->teams->add($team, $person);
 				self::fail("Expected an error for $team/$person.");
@@ -104,11 +104,11 @@ final class TeamStoreTest extends DbTestCase
 		$this->register($alice, 'alice-2', array('team' => 'private'));
 		$this->request('POST', '/message', $alice, array('from' => 'alice-1', 'to' => 'alice', 'kind' => 'note', 'text' => 'x'));
 
-		$this->teams->rename('default', 'moving-in');
+		$this->teams->rename('default', 'acme');
 
-		self::assertSame(array('moving-in', 'private'), $this->pdo->query('SELECT team FROM session ORDER BY name')->fetchAll(\PDO::FETCH_COLUMN));
-		self::assertSame(array('moving-in'), $this->pdo->query('SELECT team FROM message')->fetchAll(\PDO::FETCH_COLUMN));
-		self::assertSame(array('person' => 'Alice', 'teams' => array('moving-in')), $this->request('GET', '/me', $alice)->data);
+		self::assertSame(array('acme', 'private'), $this->pdo->query('SELECT team FROM session ORDER BY name')->fetchAll(\PDO::FETCH_COLUMN));
+		self::assertSame(array('acme'), $this->pdo->query('SELECT team FROM message')->fetchAll(\PDO::FETCH_COLUMN));
+		self::assertSame(array('person' => 'Alice', 'teams' => array('acme')), $this->request('GET', '/me', $alice)->data);
 		self::assertSame(array('alice-1', 'alice-2'), array_column($this->request('GET', '/board', $alice)->data['sessions'], 'name'));
 	}
 
@@ -136,17 +136,17 @@ final class TeamStoreTest extends DbTestCase
 	{
 		$alice = $this->person('Alice')['token'];
 		$bob = $this->person('Bob')['token'];
-		$this->team('gti', 'Alice', 'Bob');
-		$this->register($bob, 'bob-1', array('team' => 'gti'));
+		$this->team('beta', 'Alice', 'Bob');
+		$this->register($bob, 'bob-1', array('team' => 'beta'));
 		$this->register($bob, 'bob-2', array('team' => 'private'));
-		$this->register($alice, 'alice-1', array('team' => 'gti'));
+		$this->register($alice, 'alice-1', array('team' => 'beta'));
 
-		self::assertTrue($this->teams->remove('gti', 'bob'));
-		self::assertFalse($this->teams->remove('gti', 'bob'));
+		self::assertTrue($this->teams->remove('beta', 'bob'));
+		self::assertFalse($this->teams->remove('beta', 'bob'));
 
 		self::assertSame(array('alice-1'), array_column($this->request('GET', '/board', $alice)->data['sessions'], 'name'));
 		self::assertSame(array('bob-2'), array_column($this->request('GET', '/board', $bob)->data['sessions'], 'name'));
-		self::assertSame(404, $this->request('POST', '/session', $bob, array('name' => 'bob-1', 'team' => 'gti', 'machine' => 'pc', 'repo' => 'app', 'repo_base' => 'app'))->status);
+		self::assertSame(404, $this->request('POST', '/session', $bob, array('name' => 'bob-1', 'team' => 'beta', 'machine' => 'pc', 'repo' => 'app', 'repo_base' => 'app'))->status);
 		self::assertSame(404, $this->request('POST', '/message', $bob, array('from' => 'bob-2', 'to' => 'alice', 'kind' => 'note', 'text' => 'x'))->status);
 	}
 
@@ -155,12 +155,12 @@ final class TeamStoreTest extends DbTestCase
 	 */
 	public function testRemoveRollsBackOnError(): void
 	{
-		$this->team('gti', 'Alice');
+		$this->team('beta', 'Alice');
 		$this->pdo->exec("CREATE FUNCTION fail() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN RAISE EXCEPTION 'boom'; END \$\$");
 		$this->pdo->exec('CREATE TRIGGER fail BEFORE DELETE ON session FOR EACH STATEMENT EXECUTE FUNCTION fail()');
 
 		try {
-			$this->teams->remove('gti', 'Alice');
+			$this->teams->remove('beta', 'Alice');
 			self::fail('Expected the trigger to fail.');
 		} catch(\PDOException) {
 			self::assertFalse($this->pdo->inTransaction());

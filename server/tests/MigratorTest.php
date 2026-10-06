@@ -16,7 +16,7 @@ use Relay\Migrator;
  */
 final class MigratorTest extends DbTestCase
 {
-	const array ALL = array('001_schema.sql', '002_english_names.sql', '003_teams.sql');
+	const array ALL = array('001_schema.sql', '002_english_names.sql', '003_teams.sql', '004_oauth.sql');
 
 	/**
 	 * @return void
@@ -29,7 +29,7 @@ final class MigratorTest extends DbTestCase
 		self::assertSame(self::ALL, $migrator->migrate());
 		self::assertSame(array(), $migrator->migrate());
 		self::assertSame(
-			array('message', 'message_read', 'migration', 'person', 'session', 'team', 'team_member'),
+			array('message', 'message_read', 'migration', 'oauth_client', 'oauth_code', 'oauth_token', 'person', 'relay_secret', 'session', 'team', 'team_member'),
 			$this->pdo->query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY 1")->fetchAll(PDO::FETCH_COLUMN)
 		);
 		self::assertSame(self::ALL, $this->pdo->query('SELECT name FROM migration ORDER BY name')->fetchAll(PDO::FETCH_COLUMN));
@@ -102,7 +102,7 @@ final class MigratorTest extends DbTestCase
 	public function testUpgradeKeepsDataInTeamDefault(): void
 	{
 		$this->createDutchDatabase(true, false);
-		self::assertSame(array('002_english_names.sql', '003_teams.sql'), $this->migrator()->migrate());
+		self::assertSame(array('002_english_names.sql', '003_teams.sql', '004_oauth.sql'), $this->migrator()->migrate());
 
 		//Bookkeeping was renamed, the old row kept:
 		self::assertSame(self::ALL, $this->pdo->query('SELECT name FROM migration ORDER BY name')->fetchAll(PDO::FETCH_COLUMN));
@@ -163,7 +163,7 @@ final class MigratorTest extends DbTestCase
 		$this->pdo->exec('ALTER TABLE bericht_gelezen RENAME CONSTRAINT bericht_gelezen_pkey TO odd_pkey');
 		$this->pdo->exec('ALTER INDEX sessie_laatst_gezien RENAME TO odd_index');
 
-		self::assertSame(array('002_english_names.sql', '003_teams.sql'), $this->migrator()->migrate());
+		self::assertSame(array('002_english_names.sql', '003_teams.sql', '004_oauth.sql'), $this->migrator()->migrate());
 		self::assertSame(array('person' => 'Alice', 'teams' => array('default')), $this->request('GET', '/me', 'token-alice')->data);
 	}
 

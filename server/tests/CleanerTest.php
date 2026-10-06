@@ -28,7 +28,7 @@ final class CleanerTest extends DbTestCase
 		$this->pdo->exec("UPDATE session SET last_seen = now() - interval '25 hours' WHERE name = 'alice-old'");
 		$this->pdo->exec("UPDATE message SET created_at = now() - interval '31 days' WHERE text = 'x'");
 
-		self::assertSame(array('sessions' => 1, 'messages' => 1), (new Cleaner($this->pdo))->cleanUp());
+		self::assertSame(array('sessions' => 1, 'messages' => 1, 'oauth' => 0), (new Cleaner($this->pdo))->cleanUp());
 		self::assertSame(1, (int) $this->pdo->query('SELECT count(*) FROM session')->fetchColumn());
 		self::assertSame(1, (int) $this->pdo->query('SELECT count(*) FROM message')->fetchColumn());
 	}

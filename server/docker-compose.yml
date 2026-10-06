@@ -27,6 +27,7 @@ services:
       RELAY_DSN: "pgsql:host=db;dbname=relay"
       RELAY_DB_USER: relay
       RELAY_DB_PASS: ${RELAY_DB_PASS}
+      RELAY_PUBLIC_URL: ${RELAY_PUBLIC_URL:-}
     ports:
       - "${RELAY_PORT:-8080}:80"
     depends_on:

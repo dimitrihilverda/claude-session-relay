@@ -124,7 +124,7 @@ final class SessionStore
 	 * Updates `last_seen` of one of my own sessions.
 	 * @param array{id:int,name:string} $person
 	 * @param string $name
-	 * @return array{name:string,team:string} The session.
+	 * @return array{name:string,team:string,repo:string,repo_base:string,branch:string,ticket:string} The session.
 	 * @throws HttpError 404 when it is not my own (visible) session.
 	 */
 	public function heartbeat(array $person, string $name): array
@@ -214,20 +214,23 @@ final class SessionStore
 	/**
 	 * @param array{id:int,name:string} $person
 	 * @param string $name
-	 * @return array{name:string,team:string}
+	 * @return array{name:string,team:string,repo:string,repo_base:string,branch:string,ticket:string}
 	 * @throws HttpError 404 when it is not my own (visible) session.
 	 */
 	public function own(array $person, string $name): array
 	{
 		$name = Input::name(array('session' => $name), 'session');
-		$st = $this->pdo->prepare('SELECT s.name, s.team FROM session s WHERE s.name = :name AND s.person_id = :person AND visible_to(s.team, s.person_id, :viewer)');
+		$st = $this->pdo->prepare(
+			"SELECT s.name, s.team, s.repo, s.repo_base, s.branch, coalesce(s.ticket, '') AS ticket FROM session s
+			 WHERE s.name = :name AND s.person_id = :person AND visible_to(s.team, s.person_id, :viewer)"
+		);
 		$st->execute(array('name' => $name, 'person' => $person['id'], 'viewer' => $person['id']));
 		$row = $st->fetch();
 		if($row === false) {
 			throw new HttpError(404, self::UNKNOWN_SESSION);
 		}
 
-		return array('name' => (string) $row['name'], 'team' => (string) $row['team']);
+		return array_map('strval', $row);
 	}
 
 	/**

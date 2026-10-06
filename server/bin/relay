@@ -17,13 +17,13 @@ const USAGE = <<<'TXT'
 usage: relay <command>
   migrate                        run new database migrations
   person:create <name>           create a person (or give them a new token)
-  person:revoke <name>           revoke a person's token
+  person:revoke <name>           revoke a person's token and their connector (OAuth) tokens
   team:create <name>             create a team
   team:rename <old> <new>        rename a team (its sessions and messages move along)
   team:add <team> <person>       add a person to a team
   team:remove <team> <person>    remove a person from a team (drops their sessions in it)
   team:list                      list teams and their members
-  cleanup                        remove stale sessions (> 24 h) and old messages (> 30 days)
+  cleanup                        remove stale sessions (> 24 h), old messages (> 30 days) and expired OAuth rows
 
 TXT;
 
@@ -76,7 +76,7 @@ try {
 			break;
 		case 'cleanup':
 			$count = (new Cleaner($pdo))->cleanUp();
-			echo "removed {$count['sessions']} sessions, {$count['messages']} messages\n";
+			echo "removed {$count['sessions']} sessions, {$count['messages']} messages, {$count['oauth']} oauth rows\n";
 			break;
 		default:
 			fwrite(STDERR, USAGE);

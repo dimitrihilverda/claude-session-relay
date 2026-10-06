@@ -111,6 +111,45 @@ session-relay board
 
 Open the relay's URL in a browser and enter your token to see the board.
 
+## Use from claude.ai / Cowork
+
+People who use Claude without a local Claude Code (claude.ai, the desktop and mobile apps,
+Cowork) can add the relay as a remote MCP connector. They get the same board, messages and
+conflict check, with the same team isolation.
+
+**claude.ai, Desktop, Cowork:** Settings > Connectors > Add custom connector, and enter
+`https://relay.example.com/mcp` as the URL. Claude then opens the relay's consent page: paste
+your relay token (the one from `person:create`) and click Approve. Claude connects through OAuth
+(dynamic client registration, PKCE); your relay token stays on that page and is never given to
+Claude. `person:revoke`, or running `person:create` again, also ends these connections.
+
+**Claude Code** (without the plugin, or on a machine without PowerShell) can use the same
+endpoint with a header:
+
+```bash
+claude mcp add --transport http session-relay https://relay.example.com/mcp \
+  --header "Authorization: Bearer <your-token>"
+```
+
+The tools are `whoami`, `board`, `register`, `unregister`, `check`, `send`, `ask`, `answer` and
+`inbox`. A cloud session is called `<you>-cloud-<label>`.
+
+What the cloud variant lacks: there are no hooks. Nothing registers, sends heartbeats, checks
+before a commit or push, or delivers messages automatically. Claude has to call `register` at the
+start (and again now and then as a heartbeat), `inbox` regularly and `check` before a commit or
+push. The server tells Claude this when it connects, but it is good to remind Claude in your
+project instructions.
+
+This needs `public_url` in `config.php` (or `RELAY_PUBLIC_URL` in `.env`): the relay's public
+HTTPS address, for example `https://relay.example.com`. The OAuth metadata is built from it, it
+must match the URL people enter exactly, and `/mcp` only accepts browser requests from that
+origin. Without it, `/mcp`, `/oauth/*` and the OAuth `/.well-known` documents answer 503; the
+rest of the relay keeps working. Client registration is rate limited (20 per address per hour,
+500 unused clients per day in total). The web server must pass every path to
+`public/index.php`, including `/.well-known/oauth-protected-resource`,
+`/.well-known/oauth-authorization-server`, `/oauth/*` and `/mcp`, and must pass the
+`Authorization` header on to PHP.
+
 ## Conflict rules
 
 | Action | Blocked when |
