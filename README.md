@@ -61,7 +61,7 @@ flowchart LR
     subgraph C["Claude in the cloud"]
         CC["claude.ai, Desktop,<br/>Cowork, mobile"]
     end
-    R[("Relay<br/>PHP + PostgreSQL<br/><i>team acme · team lab · private</i>")]
+    R[("Relay<br/>PHP + PostgreSQL<br/>teams: acme, lab, private")]
     CA <-- "HTTPS: board, messages,<br/>conflict check" --> R
     CB <-- "HTTPS" --> R
     CC <-- "MCP connector (OAuth)" --> R
