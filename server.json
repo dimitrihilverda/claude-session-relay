@@ -1,0 +1,24 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.dimitrihilverda/claude-session-relay",
+  "title": "Session Relay",
+  "description": "Self-hosted relay: agent sessions on different machines share a board, chat and check git conflicts",
+  "version": "1.1.0",
+  "websiteUrl": "https://github.com/dimitrihilverda/claude-session-relay#use-from-claudeai--cowork",
+  "repository": {
+    "url": "https://github.com/dimitrihilverda/claude-session-relay",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://{relay_host}/mcp",
+      "variables": {
+        "relay_host": {
+          "description": "Host name of your own Session Relay server (self-hosted, e.g. relay.example.com). Authorization uses OAuth with PKCE.",
+          "isRequired": true
+        }
+      }
+    }
+  ]
+}
