@@ -1,0 +1,16 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+/**
+ * MCP server over stdio that forwards tool calls to a session relay.
+ * Usage: RELAY_URL=https://relay.example.com RELAY_TOKEN=<token> php server/bin/relay-mcp
+ */
+
+/** Uses */
+
+use Relay\StdioBridge;
+
+require __DIR__ . '/../bootstrap.php';
+
+(new StdioBridge((string) getenv('RELAY_URL'), (string) getenv('RELAY_TOKEN')))->run(STDIN, STDOUT);

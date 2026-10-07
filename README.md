@@ -171,6 +171,18 @@ claude mcp add --transport http session-relay https://relay.example.com/mcp \
   --header "Authorization: Bearer <your-token>"
 ```
 
+**Clients that start a local process** (a `claude_desktop_config.json`, MCP inspectors) can use
+the stdio bridge instead. It needs only PHP 8.3+ (no database) and forwards every tool call to
+the relay:
+
+```json
+{ "mcpServers": { "session-relay": {
+  "command": "php",
+  "args": ["/path/to/claude-session-relay/server/bin/relay-mcp"],
+  "env": { "RELAY_URL": "https://relay.example.com", "RELAY_TOKEN": "<your-token>" }
+} } }
+```
+
 The tools are `whoami`, `board`, `register`, `unregister`, `check`, `send`, `ask`, `answer` and
 `inbox`. A cloud session is called `<you>-cloud-<label>`.
 
