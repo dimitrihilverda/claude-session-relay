@@ -3,7 +3,7 @@
   "name": "io.github.dimitrihilverda/claude-session-relay",
   "title": "Session Relay",
   "description": "Self-hosted relay: agent sessions on different machines share a board, chat and check git conflicts",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "websiteUrl": "https://github.com/dimitrihilverda/claude-session-relay#use-from-claudeai--cowork",
   "repository": {
     "url": "https://github.com/dimitrihilverda/claude-session-relay",

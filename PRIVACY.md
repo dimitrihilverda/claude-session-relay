@@ -3,6 +3,14 @@
 Session Relay is open-source software that you run yourself. The author does not operate a
 service for it, does not receive any data from it, and has no access to your relay.
 
+## Local mode: nothing leaves your machine
+
+Without a config file (or for folders mapped to a local relay) the plugin talks to no server at
+all. The board and the messages between your sessions are kept in a file in
+`~/.claude/session-relay/` on your own machine: session names, repository and branch names,
+claimed file paths and the messages. Sessions are removed 24 hours after their last heartbeat,
+messages after 14 days. Delete that folder to remove everything.
+
 ## What the plugin sends, and where
 
 The plugin talks only to the relay server(s) you configure with `session-relay relay add`: one
@@ -41,6 +49,7 @@ controls the server, its database and its backups.
 - Map only the folders you want on a relay (`session-relay folder`), or remove a mapping
   (`session-relay folder remove`).
 - Remove a relay from your machine with `session-relay relay remove`.
+- Stay fully local: don't add a relay server (or remove it); local mode needs none.
 - The relay operator can revoke a token (`relay person:revoke`) and delete data from the
   database at any time.
 

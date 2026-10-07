@@ -4,12 +4,12 @@
     "name": "Dimitri Hilverda",
     "url": "https://github.com/dimitrihilverda"
   },
-  "description": "Session Relay: Claude Code sessions that coordinate across machines.",
+  "description": "Session Relay: Claude Code sessions that coordinate, on one machine or across machines.",
   "plugins": [
     {
       "name": "session-relay",
       "source": "./plugin",
-      "description": "Shared board, messages and git-conflict checks between Claude Code sessions on different machines."
+      "description": "Shared board, messages and git-conflict checks between Claude Code sessions: local on one machine, or across machines via a relay."
     }
   ]
 }

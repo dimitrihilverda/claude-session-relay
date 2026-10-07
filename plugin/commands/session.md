@@ -1,5 +1,5 @@
 ---
-description: Coordinate with other Claude Code sessions (on this and other machines) through the session relay - board, messages and git-conflict checks, per team.
+description: Coordinate with other Claude Code sessions (on this machine, or with a team on other machines) through the session relay - board, messages and git-conflict checks.
 argument-hint: "[setup | start | status | done]"
 ---
 
@@ -11,6 +11,17 @@ this session's name, team and relay, are in the context at the start of the sess
 relay: this session is ..."). In Bash the name is also in `$SESSION_RELAY_NAME`. Always pass it
 as `--session <name>`. Below, `session-relay` means that full client path.
 
+## Local mode or a relay server
+
+- **Local** (the default when there is no config file): your sessions on this machine share a
+  board, messages and the git check through a file in `~/.claude/session-relay/`. No server, no
+  token, no team; everything is `private`, and nothing leaves the machine. The start context says
+  "local (only your sessions on this machine see it, no server)".
+- **Relay server**: sessions of a team on different machines (see below). Moving from local to a
+  team later is only `relay add` + `folder`; nothing needs to be reinstalled.
+- In local mode your own sessions **do** block each other (they are all the same person); on a
+  relay server they do not, and only a teammate's session can block you.
+
 ## Teams, private, and folders
 
 - A relay serves several **teams**. A session is in exactly one team, or **private**. You only
@@ -18,14 +29,19 @@ as `--session <name>`. Below, `session-relay` means that full client path.
   only to its owner's other sessions. Anything outside your team behaves as if it does not exist.
 - Which relay and team a session joins follows from its folder: the **longest** mapped folder
   above the working directory wins (`session-relay folders` shows the mapping).
-- A folder that is not mapped stays **off every relay**: no board, no messages, no checks. Only
+- Without a config file every folder is on the local relay. Once a config file exists, a folder
+  that is not mapped stays **off every relay**: no board, no messages, no checks. Only
   when the user asks, run `session-relay register --session <name>` there; it then joins as
   `private` (add `--team <team>` and/or `--relay <relay>` to choose; `--relay` is required when
   several relays are configured). The hooks keep it alive from then on.
 
 ## setup
 
-Ask the user for what is missing, then:
+Alone on one machine: nothing to set up, the plugin works as is (`session-relay relays` shows the
+local relay). To make it explicit, or to give the person another name: `session-relay relay
+add-local [<name>] [--person <person>]`, then `session-relay folder <path> <name> private`.
+
+With a team, ask the user for what is missing, then:
 - `session-relay relay add <name> <url> <token> <person>` - reports whether the relay is reachable
   and which teams the person is in.
 - `session-relay folder <path> <relay> <team|private>` for each folder that should join, e.g. the
@@ -37,8 +53,9 @@ never print it back, never put it in a file inside a repository.
 ## Always first
 
 1. `session-relay board --session <name>` and `session-relay inbox --session <name>`.
-2. `ListAgents` for your own other sessions on this machine (the relay deliberately does not
-   treat a person's own sessions as conflicts).
+2. On a relay server: `ListAgents` for your own other sessions on this machine (the server
+   deliberately does not treat a person's own sessions as conflicts). In local mode they are
+   already on the board.
 3. Note the repo root, current branch and whether you are in a worktree.
 
 ## start
@@ -73,7 +90,8 @@ A message arrives when `listen` stops (you are woken up), after a tool call, or 
 ## Blocked by the relay
 
 A hook denies a `git commit` or `git push` with "Session relay: conflict ...": a push conflicts
-when a teammate is on that branch, a commit when a teammate claims those files. Coordinate with
+when a teammate (in local mode: another session of yours) is on that branch, a commit when it
+claims those files. Coordinate with
 that session (`session-relay ask`). If your user explicitly says to go ahead anyway, ask once
 more with `AskUserQuestion`, then append `# session-relay:override` to the command.
 
@@ -94,7 +112,7 @@ short overview: who is where, what is claimed, and whether your work conflicts
 
 ## Working rules
 
-- Never touch files a teammate's session has claimed without asking first.
+- Never touch files another session has claimed without asking first.
 - In a shared checkout the git index is shared: read `git diff --cached --stat` right before
   every commit; stage as late as possible. A separate worktree has its own index.
 - Never force-push without explicit permission.

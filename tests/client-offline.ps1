@@ -157,12 +157,142 @@ try {
     Expect 'help: exit 0 and lists the commands' ($r.code -eq 0 -and $r.out -match 'relay add <name> <url> <token> <person>' -and $r.out -match 'folder <path> <relay> <team\|private>' -and $r.out -match 'migrate-old' -and $r.out -match 'register \[--team T\] \[--relay R\]' -and $r.out -match 'hook <start\|prompt\|pretool\|posttool\|end>') $r.out
     $r = Client @() $tmp
     Expect 'no arguments = help' ($r.code -eq 0 -and $r.out -match 'Setup') $r.out
-    $r = Client @('board') $tmp
-    Expect 'no config: board exits 1 with a hint' ($r.code -eq 1 -and $r.out -match 'relay add') $r.out
     $r = Client @('frobnicate') $tmp
     Expect 'unknown command: exit 1' ($r.code -eq 1) $r.out
+    Expect 'help: mentions the local relay' ((Client @('help') $tmp).out -match 'relay add-local') ''
+
+    # --- local mode: no config file, no server ---
+    $saveState = $stateDir; $stateDir = Join-Path $tmp 'state-local'
+    $localCfg = Join-Path $tmp 'none.json'
+    $localRepo = Join-Path $tmp 'local\app'
+    New-Repo $localRepo 'main'
+    $r = Client @('relays') $tmp $null $localCfg
+    Expect 'no config: relays shows the implicit local relay' ($r.code -eq 0 -and $r.out -match 'local\s+local \(this machine only\)\s+as \S+' -and $r.out -match 'no config file yet') $r.out
+    $r = Client @('folders') $tmp $null $localCfg
+    Expect 'no config: folders says every folder uses the local relay' ($r.out -match 'every folder uses the local relay') $r.out
+    $r = Client @('board') $tmp $null $localCfg
+    Expect 'no config: board works and is empty' ($r.code -eq 0 -and $r.out -match '\(empty\)') $r.out
+    $sidLa = 'a1a10000-0000-0000-0000-000000000000'; $sidLb = 'b2b20000-0000-0000-0000-000000000000'
+    $r = Client @('hook', 'start') $tmp (HookIn $localRepo $sidLa) $localCfg
+    $person = if ($r.out -match 'this session is ([a-z0-9._-]+)-app-a1a1') { $Matches[1] } else { '?' }
+    $la = "$person-app-a1a1"; $lb = "$person-app-b2b2"
+    Expect 'local: start hook registers the session, no server' ($r.out -match "this session is $la, local \(only your sessions on this machine" -and $r.out -match 'Board \(this machine\)' -and $r.out -match "\[private\] $la") $r.out
+    Expect 'local: nothing is written to the config' (-not (Test-Path $localCfg)) ''
+    $r = Client @('hook', 'start') $tmp (HookIn $localRepo $sidLb) $localCfg
+    Expect 'local: second session sees the first on the board' ($r.out -match "\[private\] $la" -and $r.out -match "\[private\] $lb") $r.out
+
+    Client @('claim', 'src/', '--session', $la) $localRepo $null $localCfg | Out-Null
+    $r = Client @('hook', 'pretool') $tmp (HookIn $localRepo $sidLb 'git add src/x.c && git commit -m x') $localCfg
+    Expect 'local: commit on a path claimed by my other session -> deny' ($r.out -match '"permissionDecision":"deny"' -and $r.out -match "\($la\) claims src/") $r.out
+    $r = Client @('hook', 'pretool') $tmp (HookIn $localRepo $sidLb 'git add docs/x.md && git commit -m x') $localCfg
+    Expect 'local: commit on a free path -> allowed' ($r.out.Trim() -eq '') $r.out
+    $r = Client @('hook', 'pretool') $tmp (HookIn $localRepo $sidLb 'git push') $localCfg
+    Expect 'local: push while my other session is on the branch -> deny' ($r.out -match '"permissionDecision":"deny"' -and $r.out -match 'is also on branch main') $r.out
+    $r = Client @('hook', 'pretool') $tmp (HookIn $localRepo $sidLb 'git push # session-relay:override') $localCfg
+    Expect 'local: override allows' ($r.out.Trim() -eq '') $r.out
+
+    $r = Client @('ask', $lb, 'done', 'yet?', '--session', $la) $localRepo $null $localCfg
+    Expect 'local: ask' ($r.code -eq 0 -and $r.out -match 'sent \(#1\)') $r.out
+    $r = Client @('hook', 'prompt') $tmp (HookIn $localRepo $sidLb) $localCfg
+    Expect 'local: prompt hook delivers the question' ($r.out -match "\[question #1\] $la" -and $r.out -match 'done yet\?') $r.out
+    $r = Client @('inbox', '--session', $lb) $localRepo $null $localCfg
+    Expect 'local: a delivered message is read' ($r.out -match 'no new messages') $r.out
+    $r = Client @('answer', '1', 'yes', '--session', $lb) $localRepo $null $localCfg
+    $r = Client @('inbox', '--session', $la) $localRepo $null $localCfg
+    Expect 'local: answer goes back to the asker' ($r.out -match "\[answer #2\] $lb" -and $r.out -match 'answer to #1' -and $r.out -match 'yes') $r.out
+    $r = Client @('answer', '99', 'x', '--session', $lb) $localRepo $null $localCfg
+    Expect 'local: answer to an unknown question -> exit 1' ($r.code -eq 1 -and $r.out -match 'No such message') $r.out
+    $r = Client @('send', 'nobody', 'x', '--session', $la) $localRepo $null $localCfg
+    Expect 'local: unknown recipient -> exit 1' ($r.code -eq 1 -and $r.out -match 'No such session or person') $r.out
+    Client @('send', $person, 'to', 'all', '--session', $la) $localRepo $null $localCfg | Out-Null
+    $rb = Client @('inbox', '--session', $lb) $localRepo $null $localCfg
+    $ra = Client @('inbox', '--session', $la) $localRepo $null $localCfg
+    Expect 'local: a note to the person reaches my other sessions, not the sender' ($rb.out -match 'to all' -and $ra.out -match 'no new messages') ($rb.out + "`n" + $ra.out)
+
+    # listen picks up a message that arrives while it waits
+    $listenJob = Start-Job -ScriptBlock {
+        param($Shell, $Client, $ClaudeDir, $StateDir, $Cfg, $Dir, $Name)
+        $env:SESSION_RELAY_CLAUDE_DIR = $ClaudeDir; $env:SESSION_RELAY_DIR = $StateDir; $env:SESSION_RELAY_CONFIG = $Cfg
+        Set-Location $Dir
+        & $Shell -NoProfile -ExecutionPolicy Bypass -File $Client listen --max-minutes 1 --session $Name 2>&1 | ForEach-Object { "$_" }
+    } -ArgumentList $Shell, $client, $claudeDir, $stateDir, $localCfg, $localRepo, $la
+    Start-Sleep -Seconds 4
+    Client @('send', $la, 'wake', 'up', '--session', $lb) $localRepo $null $localCfg | Out-Null
+    $listenOut = (@(Receive-Job (Wait-Job $listenJob -Timeout 60)) -join "`n"); Remove-Job $listenJob -Force
+    Expect 'local: listen returns a message that arrives while waiting' ($listenOut -match "\[note #\d+\] $lb" -and $listenOut -match 'wake up') $listenOut
+
+    # a session without a heartbeat for 10 minutes drops off the board
+    $storeFile = Join-Path $stateDir 'local-local.json'
+    $store = [IO.File]::ReadAllText($storeFile) | ConvertFrom-Json
+    foreach ($s in $store.sessions) { if ($s.name -eq $lb) { $s.last_seen = [long]$s.last_seen - 700 } }
+    [IO.File]::WriteAllText($storeFile, (ConvertTo-Json -Depth 10 -Compress -InputObject $store))
+    $r = Client @('board') $tmp $null $localCfg
+    Expect 'local: stale session is off the board' ($r.out -match $la -and $r.out -notmatch $lb) $r.out
+    $r = Client @('hook', 'pretool') $tmp (HookIn $localRepo $sidLa 'git add src/y.c && git commit -m y') $localCfg
+    Expect 'local: a stale session no longer blocks' ($r.out.Trim() -eq '') $r.out
+
+    # concurrent writers: nothing lost, the file stays valid
+    $writer = {
+        param($Shell, $Client, $ClaudeDir, $StateDir, $Cfg, $Dir, $From, $To, $Tag)
+        $env:SESSION_RELAY_CLAUDE_DIR = $ClaudeDir; $env:SESSION_RELAY_DIR = $StateDir; $env:SESSION_RELAY_CONFIG = $Cfg
+        Set-Location $Dir
+        foreach ($i in 1..8) { & $Shell -NoProfile -ExecutionPolicy Bypass -File $Client send $To "$Tag-$i" --session $From 2>&1 | Out-Null }
+    }
+    Client @('register', '--session', $lb) $localRepo $null $localCfg | Out-Null
+    Client @('inbox', '--session', $la) $localRepo $null $localCfg | Out-Null
+    $jobs = @(
+        (Start-Job -ScriptBlock $writer -ArgumentList $Shell, $client, $claudeDir, $stateDir, $localCfg, $localRepo, $lb, $la, 'p'),
+        (Start-Job -ScriptBlock $writer -ArgumentList $Shell, $client, $claudeDir, $stateDir, $localCfg, $localRepo, $lb, $la, 'q')
+    )
+    Wait-Job $jobs -Timeout 180 | Out-Null; Remove-Job $jobs -Force
+    $r = Client @('inbox', '--session', $la) $localRepo $null $localCfg
+    $got = @([regex]::Matches($r.out, '\b[pq]-\d\b') | ForEach-Object { $_.Value } | Sort-Object -Unique)
+    Expect 'local: concurrent writers lose nothing (16 messages)' ($got.Count -eq 16) $r.out
+    $valid = $true; try { [IO.File]::ReadAllText($storeFile) | ConvertFrom-Json | Out-Null } catch { $valid = $false }
+    Expect 'local: store is valid JSON after concurrent writes' $valid ''
+
+    # setup commands around the local relay
+    $r = Client @('folder', $tmp, 'local', 'acme') $tmp $null $localCfg
+    Expect 'local: a team on the local relay is refused' ($r.code -eq 1 -and $r.out -match 'has no teams') $r.out
+    $r = Client @('folder', (Join-Path $tmp 'local'), 'local', 'private') $tmp $null $localCfg
+    $c = if (Test-Path $localCfg) { [IO.File]::ReadAllText($localCfg) | ConvertFrom-Json } else { $null }
+    Expect 'local: mapping a folder writes the local relay to the config' ($c -and $c.relays.local.local -eq $true -and -not $c.relays.local.PSObject.Properties['token']) $r.out
+    $r = Client @('hook', 'start') $tmp (HookIn (Join-Path $tmp 'chats-x') 'c3c30000-0000-0000-0000-000000000000') $localCfg
+    Expect 'local: with a config file, unmapped folders stay off again' ($r.out.Trim() -eq '') $r.out
+    $r = Client @('relay', 'add-local', 'solo', '--person', 'Sam') $tmp $null $localCfg
+    Expect 'relay add-local: saved with a person' ($r.code -eq 0 -and $r.out -match 'relay solo saved' -and $r.out -match 'as sam') $r.out
+    $addCfg = Join-Path $tmp 'add.json'
+    Client @('relay', 'add', 'work', 'http://127.0.0.1:1', 'tok', 'alice') $tmp $null $addCfg | Out-Null
+    $c = [IO.File]::ReadAllText($addCfg) | ConvertFrom-Json
+    Expect 'relay add without a config: only that relay is written (no implicit local)' ($c.relays.work -and -not $c.relays.PSObject.Properties['local']) ([IO.File]::ReadAllText($addCfg))
+
+    # the port of server/src/Conflict.php, against the cases of server/tests/ConflictTest.php
+    $probe = Join-Path $tmp 'probe.ps1'
+    [IO.File]::WriteAllText($probe, @'
+param($Client)
+. $Client
+$cases = @(
+    @('src/a.ts', 'src/a.ts', $true), @('src/stores/', 'src/stores/userStore.ts', $true), @('src/stores', 'src/stores/userStore.ts', $true),
+    @('src/stores/userStore.ts', 'src/stores', $true), @('src/stores', 'src/storesX.ts', $false), @('src\stores\userStore.ts', 'src/stores/userStore.ts', $true),
+    @('./src/a.ts', 'src/a.ts', $true), @('SRC/Stores/x.ts', 'src/stores/x.ts', $true), @('.', 'src/a.ts', $true), @('*', 'README.md', $true),
+    @('', 'src/a.ts', $false), @('src/a.ts', 'src/b.ts', $false))
+foreach ($c in $cases) { if ((@(Get-ClaimOverlap @($c[0]) @($c[1])).Count -gt 0) -ne $c[2]) { "FAIL overlap $($c[0]) / $($c[1])" } }
+$o = @(Get-ClaimOverlap @('src/stores/', 'lib/', 'docs', 'SRC/a.ts', '.', '') @('src/stores/x.ts', 'docs/readme.md', 'src/a.ts')) -join '|'
+if ($o -ne 'src/stores/|docs|SRC/a.ts|.') { "FAIL list $o" }
+if ((@(Get-ClaimOverlap @('src/') @('*')) -join '|') -ne 'src/') { 'FAIL star' }
+if (@(Get-ClaimOverlap @('src/') @()).Count -ne 0) { 'FAIL none' }
+if ((Get-ConflictReason 'test' @() 'test' @()) -ne 'is also on branch test') { 'FAIL branch' }
+if ((Get-ConflictReason 'test' @('src/stores/userStore.ts') 'test' @('src/stores/', 'docs/')) -ne 'is also on branch test and claims src/stores/') { 'FAIL both' }
+if ($null -ne (Get-ConflictReason '' @() '' @())) { 'FAIL detached' }
+if ($null -ne (Get-ConflictReason 'feature/a' @('src/a.ts') 'feature/b' @('src/b.ts'))) { 'FAIL different' }
+'PROBE DONE'
+'@)
+    $out = (& $Shell -NoProfile -ExecutionPolicy Bypass -File $probe $client 2>&1 | ForEach-Object { "$_" }) -join "`n"
+    Expect 'local: the Conflict port matches the server cases' ($out -match 'PROBE DONE' -and $out -notmatch 'FAIL') $out
+    $stateDir = $saveState
+
     $r = Client @('relays') $tmp
-    Expect 'relays without config: hint' ($r.code -eq 0 -and $r.out -match 'no relays') $r.out
+    Expect 'relays with the implicit local config (no file at the test path yet)' ($r.code -eq 0 -and $r.out -match 'local \(this machine only\)') $r.out
 
     # --- relays ---
     $r = Client @('relay', 'add', 'plain', 'http://relay.example.com', 'secret-token-x', 'Alice') $tmp

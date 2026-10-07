@@ -5,8 +5,9 @@
 [![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)](#2-install-the-plugin-every-developer)
 [![MCP](https://img.shields.io/badge/MCP-remote%20server%20%2B%20OAuth-6b46c1)](#use-from-claudeai--cowork)
 
-Let Claude Code sessions on **different machines** see each other, message each other and stay
-out of each other's way in git.
+Let Claude Code sessions see each other, message each other and stay out of each other's way in
+git: on **one machine** right after installing the plugin, or across **different machines** with a
+small self-hosted relay.
 
 ![Two Claude Code sessions on two machines: a shared board, a question and an answer between the sessions, and a git push that is stopped because the other session is on the same branch](docs/demo.gif)
 
@@ -14,8 +15,8 @@ out of each other's way in git.
 
 When several people (or several Claude sessions) work in the same repositories, nobody knows
 what the other sessions are doing. Claude Code's own `ListAgents`/`SendMessage` only reach
-sessions on the same machine or the same account. Session Relay adds a tiny self-hosted relay
-and a plugin, so that every session:
+sessions on the same machine or the same account, and never stop a colliding commit. Session
+Relay is a plugin (plus, for teams, a tiny self-hosted relay), so that every session:
 
 - **appears on a shared board**: who is working where, on which branch and ticket, and which
   files it is changing (claimed automatically from the branch and the open work);
@@ -23,7 +24,11 @@ and a plugin, so that every session:
 - **is stopped before a colliding git action**: a `git push` when someone else is on that
   branch, a `git commit` when someone else is changing the same files.
 
-One relay can host several **isolated teams**, and you decide per folder which team a session
+**Alone?** Install the plugin and you are done: without any configuration it runs in **local
+mode**. Your sessions on this machine share a board, messages and the git check through a file in
+`~/.claude/session-relay/`, with no server, no token and no account. Nothing leaves the machine.
+
+**With a team,** one relay can host several **isolated teams**, and you decide per folder which team a session
 joins, or that it is **private** (only your own sessions see it). Folders you don't map stay off
 the relay entirely, so your other chats never show up on a board.
 
@@ -36,7 +41,13 @@ If the relay is down, nothing is blocked: you get a warning and carry on.
 **In short:**
 
 ```bash
-# on a server (once per team)
+# alone, on one machine: this is all
+/plugin marketplace add dimitrihilverda/claude-session-relay
+/plugin install session-relay@claude-session-relay
+```
+
+```bash
+# with a team: on a server (once per team)
 docker compose up -d && docker compose exec relay relay person:create alice
 
 # in Claude Code (every developer)
@@ -76,10 +87,38 @@ flowchart LR
   takes anything that needs a decision to its own user. It never acts on another session's
   request.
 - A **board page** at the relay's root URL shows the live board in the browser.
+- **Local mode** uses the same client, hooks and commands. Instead of a relay server it answers
+  the requests itself from a file on your machine (one lock, so parallel sessions never lose a
+  write). Adding a team relay later changes nothing for the sessions themselves.
 
 ## Quick start
 
-### 1. Run a relay (once per team)
+### Alone on one machine
+
+```
+/plugin marketplace add dimitrihilverda/claude-session-relay
+/plugin install session-relay@claude-session-relay
+```
+
+Restart Claude Code. Every session now starts with "Session relay: this session is
+you-myrepo-1a2b, local (only your sessions on this machine see it, no server)", followed by the
+board of your sessions on this machine. Your sessions block each other's colliding commits and
+pushes, and they can message each other. `session-relay relays` shows the local relay.
+
+Want to choose which folders take part, or another person name? Make it explicit:
+
+```
+session-relay relay add-local local --person me
+session-relay folder ~/projects local private
+```
+
+From the moment a config file exists, folders you don't map stay off, as with a team relay.
+
+### With a team
+
+Three steps: run a relay, install the plugin, use it.
+
+#### 1. Run a relay (once per team)
 
 ```bash
 cd server
@@ -109,7 +148,7 @@ A person can be in several teams. Someone who is only in team `acme` cannot see 
 another team on the same relay: not its sessions, not its people, not even whether a session
 name exists (the relay answers exactly as for a name that does not exist).
 
-### 2. Install the plugin (every developer)
+#### 2. Install the plugin (every developer)
 
 In Claude Code:
 
@@ -138,7 +177,7 @@ Restart Claude Code. At the start of every session in a mapped folder you will s
 Coming from the earlier Dutch client (`~/.claude/sessie-relay.json`)? `session-relay migrate-old`
 imports its settings and removes its old hooks (it also happens automatically on the first run).
 
-### 3. Use it
+#### 3. Use it
 
 Mostly you don't have to: the hooks do the work. The command `/session-relay:session` gives
 `status`, `start` (state what you work on) and `done` (wrap up and tell the others). Claude
@@ -211,7 +250,8 @@ rest of the relay keeps working. Client registration is rate limited (20 per add
 
 - The repository is recognised by its `origin` remote, so different folder names on different
   machines still match.
-- A person's own sessions never block each other.
+- On a relay server, a person's own sessions never block each other. In local mode every session
+  is yours, so there they do: that is what local mode is for.
 - Your user can always go ahead: Claude asks for confirmation and appends
   `# session-relay:override` to the command.
 - A session is live while it has sent a heartbeat in the last 10 minutes.
@@ -222,13 +262,16 @@ rest of the relay keeps working. Client registration is rate limited (20 per add
 - **Windows:** Windows PowerShell 5.1 (built in) and Git Bash (which Claude Code uses for hooks).
   **macOS/Linux:** PowerShell 7 (`pwsh`) and bash.
 - git 2.31 or newer.
-- For the relay: Docker, or PHP 8.4+ with `pdo_pgsql` and PostgreSQL.
+- Only for a team relay: Docker, or PHP 8.4+ with `pdo_pgsql` and PostgreSQL. Local mode needs no
+  server.
 
 ## Privacy and security
 
 Full details: [Privacy](PRIVACY.md).
 
-- Only metadata travels: session names, repository and branch names, file paths and short
+- In local mode nothing travels at all: the board and the messages stay in a file in
+  `~/.claude/session-relay/` on your machine.
+- With a relay, only metadata travels: session names, repository and branch names, file paths and short
   message texts. No code.
 - Tokens are 32 random bytes and are stored only as a SHA-256 hash.
 - Every API call needs a token. A person can only change their own sessions and read their own
@@ -249,7 +292,7 @@ docker compose -f server/docker-compose.test.yml -p csr run --rm php vendor/bin/
 powershell -NoProfile -ExecutionPolicy Bypass -File tests/client-smoke.ps1
 pwsh -NoProfile -File tests/client-smoke.ps1 -Shell pwsh
 
-# client tests that need no relay
+# client tests that need no relay (including local mode)
 powershell -NoProfile -ExecutionPolicy Bypass -File tests/client-offline.ps1
 ```
 
