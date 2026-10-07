@@ -172,7 +172,7 @@ claude mcp add --transport http session-relay https://relay.example.com/mcp \
 ```
 
 **Clients that start a local process** (a `claude_desktop_config.json`, MCP inspectors) can use
-the stdio bridge instead. It needs only PHP 8.3+ (no database) and forwards every tool call to
+the stdio bridge instead. It needs only PHP 8.4+ (no database) and forwards every tool call to
 the relay:
 
 ```json
