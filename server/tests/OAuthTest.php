@@ -9,6 +9,7 @@ namespace Relay\Tests;
 use Relay\App;
 use Relay\Auth;
 use Relay\Cleaner;
+use Relay\Config;
 use Relay\Http\Request;
 use Relay\Http\Response;
 
@@ -23,7 +24,12 @@ final class OAuthTest extends DbTestCase
 
 	const string VERIFIER = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk-and-some-more-chars';
 
+	const string EXTRA = 'https://brein.example.com/oauth/relay-callback';
+
 	private string $alice;
+
+	/** @var list<string> Configured extra redirect URIs for http(). */
+	private array $extraRedirects = array();
 
 	/**
 	 * @return void
@@ -46,7 +52,7 @@ final class OAuthTest extends DbTestCase
 	 */
 	private function http(string $method, string $path, array $query = array(), ?array $body = array(), array $form = array(), ?string $token = null, string $publicUrl = 'https://relay.test', string $ip = '203.0.113.1'): Response
 	{
-		return (new App($this->pdo, 2, $publicUrl))->handle(new Request($method, $path, $query, $body, $token, $form, $ip));
+		return (new App($this->pdo, 2, $publicUrl, $this->extraRedirects))->handle(new Request($method, $path, $query, $body, $token, $form, $ip));
 	}
 
 	/**
@@ -230,6 +236,69 @@ final class OAuthTest extends DbTestCase
 			array(array()),
 			array('https://claude.ai/api/mcp/auth_callback'),
 		);
+	}
+
+	/**
+	 * @return void
+	 */
+	public function testExtraRedirectAllowedWhenConfigured(): void
+	{
+		$this->extraRedirects = array(self::EXTRA);
+		$client = $this->client(array(self::EXTRA));
+		$code = $this->code($client, self::EXTRA);
+		self::assertSame(200, $this->exchange($client, $code, self::EXTRA)->status);
+	}
+
+	/**
+	 * @return void
+	 */
+	public function testExtraRedirectExactMatchOnly(): void
+	{
+		$this->extraRedirects = array(self::EXTRA);
+		foreach(array(self::EXTRA . '/x', self::EXTRA . '?a=1', self::EXTRA . '#f', 'https://other.example.com/oauth/relay-callback', 'http://brein.example.com/oauth/relay-callback', 'https://brein.example.com/OAUTH/relay-callback', 'https://brein.example.com/oauth/relay-callbac') as $uri) {
+			$response = $this->http('POST', '/oauth/register', array(), array('client_name' => 'x', 'redirect_uris' => array($uri)));
+			self::assertSame(400, $response->status, $uri);
+			self::assertSame('invalid_redirect_uri', $response->data['error']);
+		}
+		//Authorize refuses a variant even for a client registered with the exact URI:
+		$client = $this->client(array(self::EXTRA));
+		self::assertSame(400, $this->http('GET', '/oauth/authorize', self::params($client, self::EXTRA . '/x'))->status);
+	}
+
+	/**
+	 * @return void
+	 */
+	public function testNoExtraRedirectsByDefault(): void
+	{
+		$response = $this->http('POST', '/oauth/register', array(), array('client_name' => 'x', 'redirect_uris' => array(self::EXTRA)));
+		self::assertSame(400, $response->status);
+		self::assertSame('invalid_redirect_uri', $response->data['error']);
+	}
+
+	/**
+	 * @return void
+	 */
+	public function testInvalidConfiguredEntriesIgnored(): void
+	{
+		$this->extraRedirects = array('http://brein.example.com/cb', 'https://brein.example.com/cb?x=1', 'https://brein.example.com/cb#f', '*.example.com', 'https://*.example.com/cb', 'https:///cb', '', 'https://brein.example.com/cb ');
+		foreach(array('http://brein.example.com/cb', 'https://brein.example.com/cb?x=1', 'https://brein.example.com/cb', '*.example.com', 'https://a.example.com/cb', 'https://brein.example.com/cb ') as $uri) {
+			$response = $this->http('POST', '/oauth/register', array(), array('client_name' => 'x', 'redirect_uris' => array($uri)));
+			self::assertSame(400, $response->status, $uri);
+		}
+	}
+
+	/**
+	 * @return void
+	 */
+	public function testConfigParsesExtraRedirectsFromEnvironment(): void
+	{
+		putenv('RELAY_OAUTH_EXTRA_REDIRECTS= https://a.example.com/cb , http://bad/cb,,https://b.example.com/cb?x=1,https://c.example.com/cb');
+		try {
+			self::assertSame(array('https://a.example.com/cb', 'https://c.example.com/cb'), Config::load('/nonexistent')['oauth_extra_redirects']);
+		} finally {
+			putenv('RELAY_OAUTH_EXTRA_REDIRECTS');
+		}
+		self::assertSame(array(), Config::load('/nonexistent')['oauth_extra_redirects']);
 	}
 
 	/**

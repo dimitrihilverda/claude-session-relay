@@ -23,4 +23,4 @@ try {
 	exit;
 }
 
-(new App($pdo, 25, $config['public_url']))->handle(Request::fromGlobals())->send();
+(new App($pdo, 25, $config['public_url'], $config['oauth_extra_redirects']))->handle(Request::fromGlobals())->send();

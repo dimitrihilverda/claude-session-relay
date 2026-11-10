@@ -23,8 +23,9 @@ final class App
 	 * @param PDO $pdo
 	 * @param int $maxWait Longest long-poll in seconds.
 	 * @param string $publicUrl Public base URL (config public_url); '' = the OAuth/MCP endpoints are off (503).
+	 * @param list<string> $extraRedirects Extra exact https OAuth redirect URIs (config oauth_extra_redirects).
 	 */
-	public function __construct(private PDO $pdo, private int $maxWait = 25, private string $publicUrl = '')
+	public function __construct(private PDO $pdo, private int $maxWait = 25, private string $publicUrl = '', private array $extraRedirects = array())
 	{
 	}
 
@@ -76,7 +77,7 @@ final class App
 				throw new HttpError(503, 'public_url is not configured');
 			}
 
-			return $this->connector($r, new OAuthServer($this->pdo, rtrim($this->publicUrl, '/')));
+			return $this->connector($r, new OAuthServer($this->pdo, rtrim($this->publicUrl, '/'), $this->extraRedirects));
 		}
 
 		//Service tokens (a trusted service, not a person) have their own endpoints:

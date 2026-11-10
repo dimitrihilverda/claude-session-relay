@@ -259,6 +259,13 @@ rest of the relay keeps working. Client registration is rate limited (20 per add
 `/.well-known/oauth-authorization-server`, `/oauth/*` and `/mcp`, and must pass the
 `Authorization` header on to PHP.
 
+By default only claude.ai's callback and loopback `/callback` URLs are accepted as OAuth redirects.
+A trusted service that needs its own callback can be allowed with `oauth_extra_redirects` in
+`config.php` or `RELAY_OAUTH_EXTRA_REDIRECTS` in `.env` (comma-separated, for example
+`https://app.example.com/oauth/relay-callback`). Entries must be absolute `https://` URIs without
+query or fragment and are matched exactly (no prefix, no wildcard); invalid entries are ignored
+and logged.
+
 ## Conflict rules
 
 | Action | Blocked when |
