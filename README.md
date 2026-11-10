@@ -144,6 +144,24 @@ Other commands: `relay person:revoke <name>` (the token stops working), `relay t
 are removed at once), `relay cleanup` (the compose file already runs it daily). Running
 `person:create` again for an existing name issues a new token and invalidates the old one.
 
+#### Service tokens
+
+A trusted service (not a person) can ask which teams exist and who is in them. Create a token scoped to
+the teams it may see; it is shown once:
+
+```bash
+docker compose exec relay relay service:create my-service acme lab
+docker compose exec relay relay service:revoke my-service
+```
+
+```bash
+curl -H "Authorization: Bearer <service-token>" https://relay.example.com/service/teams
+# {"teams":[{"name":"acme","members":["alice","bob"]}]}
+```
+
+Only teams in the token's scope are returned (teams that do not exist are left out). A service token
+works on this endpoint only, and a person's token does not work on it.
+
 A person can be in several teams. Someone who is only in team `acme` cannot see anything of
 another team on the same relay: not its sessions, not its people, not even whether a session
 name exists (the relay answers exactly as for a name that does not exist).

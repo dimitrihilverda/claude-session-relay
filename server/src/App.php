@@ -79,6 +79,11 @@ final class App
 			return $this->connector($r, new OAuthServer($this->pdo, rtrim($this->publicUrl, '/')));
 		}
 
+		//Service tokens (a trusted service, not a person) have their own endpoints:
+		if(str_starts_with($r->path, '/service/') === true) {
+			return $this->service($r);
+		}
+
 		//Authenticate:
 		$person = (new Auth($this->pdo))->personForToken($r->token);
 		if($person === null) {
@@ -113,6 +118,26 @@ final class App
 		}
 		if($r->method === 'GET' && $r->path === '/inbox') {
 			return new Response(200, array('messages' => $this->inbox($person, $r->query, $messages)));
+		}
+
+		throw new HttpError(404, 'Unknown endpoint.');
+	}
+
+	/**
+	 * The endpoints for service tokens.
+	 * @param Request $r
+	 * @return Response
+	 * @throws HttpError
+	 */
+	private function service(Request $r): Response
+	{
+		$services = new ServiceTokenStore($this->pdo);
+		$teams = $services->teamsFor($r->token);
+		if($teams === null) {
+			throw new HttpError(401, 'Invalid or revoked token.');
+		}
+		if($r->method === 'GET' && $r->path === '/service/teams') {
+			return new Response(200, array('teams' => $services->members($teams)));
 		}
 
 		throw new HttpError(404, 'Unknown endpoint.');

@@ -9,6 +9,7 @@ use Relay\Cleaner;
 use Relay\Config;
 use Relay\Db;
 use Relay\Migrator;
+use Relay\ServiceTokenStore;
 use Relay\TeamStore;
 
 require __DIR__ . '/../bootstrap.php';
@@ -23,7 +24,9 @@ usage: relay <command>
   team:add <team> <person>       add a person to a team
   team:remove <team> <person>    remove a person from a team (drops their sessions in it)
   team:list                      list teams and their members
-  cleanup                        remove stale sessions (> 24 h), old messages (> 30 days) and expired OAuth rows
+  service:create <name> <team>...  create a service token that may list those teams and their members (or give it a new token)
+  service:revoke <name>          revoke a service token
+  cleanup                      remove stale sessions (> 24 h), old messages (> 30 days) and expired OAuth rows
 
 TXT;
 
@@ -73,6 +76,17 @@ try {
 			foreach($teams->list() as $team) {
 				echo $team['name'] . ': ' . implode(', ', $team['members']) . "\n";
 			}
+			break;
+		case 'service:create':
+			$token = (new ServiceTokenStore($pdo))->create($a, array_slice($argv, 3));
+			fwrite(STDERR, "Token for service $a (shown once; an existing token is now invalid):\n");
+			echo $token . "\n";
+			break;
+		case 'service:revoke':
+			if((new ServiceTokenStore($pdo))->revoke($a) === false) {
+				throw new InvalidArgumentException("Unknown service $a.");
+			}
+			echo "revoked $a\n";
 			break;
 		case 'cleanup':
 			$count = (new Cleaner($pdo))->cleanUp();
