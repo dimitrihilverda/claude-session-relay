@@ -29,21 +29,41 @@ final class OAuthStore
 
 	const int MAX_CLIENTS_PER_ADDRESS = 20;
 
+	/** @var list<string> Exact extra redirect URIs (validated). */
+	private array $extraRedirects;
+
 	/**
 	 * @param PDO $pdo
+	 * @param list<string> $extraRedirects Extra exact redirect URIs (config oauth_extra_redirects); invalid entries are dropped.
 	 */
-	public function __construct(private PDO $pdo)
+	public function __construct(private PDO $pdo, array $extraRedirects = array())
 	{
+		$this->extraRedirects = array_values(array_filter($extraRedirects, static fn(mixed $uri): bool => is_string($uri) === true && self::validExtraRedirect($uri) === true));
 	}
 
 	/**
-	 * Only Claude's own callback, or a loopback /callback (Claude Code) on any port.
+	 * @param string $uri
+	 * @return bool Whether a configured extra redirect is acceptable: absolute https:// with a host, no userinfo, query or fragment.
+	 */
+	public static function validExtraRedirect(string $uri): bool
+	{
+		if(preg_match('#^https://[^\s?\#*@]+\z#', $uri) !== 1) {
+			return false;
+		}
+		$parts = parse_url($uri);
+
+		return $parts !== false && ($parts['scheme'] ?? '') === 'https' && ($parts['host'] ?? '') !== ''
+			&& isset($parts['query']) === false && isset($parts['fragment']) === false && isset($parts['user']) === false;
+	}
+
+	/**
+	 * Claude's own callback, a loopback /callback (Claude Code) on any port, or an exactly configured extra https URI.
 	 * @param string $uri
 	 * @return bool
 	 */
-	public static function allowedRedirect(string $uri): bool
+	public function allowedRedirect(string $uri): bool
 	{
-		return $uri === self::CLAUDE_CALLBACK || self::loopback($uri) !== null;
+		return $uri === self::CLAUDE_CALLBACK || self::loopback($uri) !== null || in_array($uri, $this->extraRedirects, true) === true;
 	}
 
 	/**

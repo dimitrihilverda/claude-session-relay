@@ -65,4 +65,21 @@ final class CliTest extends DbTestCase
 		self::assertSame(1, $usage['code']);
 		self::assertStringContainsString('team:create', $usage['err']);
 	}
+
+	/**
+	 * @return void
+	 */
+	public function testServiceCommands(): void
+	{
+		$this->relay('team:create', 'beta');
+		$created = $this->relay('service:create', 'brain', 'beta', 'gamma');
+		self::assertSame(0, $created['code'], $created['err']);
+		self::assertMatchesRegularExpression('/^[0-9a-f]{64}\n$/', $created['out']);
+		self::assertSame(200, $this->request('GET', '/service/teams', trim($created['out']))->status);
+
+		self::assertSame(1, $this->relay('service:create', 'brain')['code']);
+		self::assertSame("revoked brain\n", $this->relay('service:revoke', 'brain')['out']);
+		self::assertSame(401, $this->request('GET', '/service/teams', trim($created['out']))->status);
+		self::assertSame(1, $this->relay('service:revoke', 'nobody')['code']);
+	}
 }

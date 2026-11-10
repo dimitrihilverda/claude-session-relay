@@ -144,6 +144,24 @@ Other commands: `relay person:revoke <name>` (the token stops working), `relay t
 are removed at once), `relay cleanup` (the compose file already runs it daily). Running
 `person:create` again for an existing name issues a new token and invalidates the old one.
 
+#### Service tokens
+
+A trusted service (not a person) can ask which teams exist and who is in them. Create a token scoped to
+the teams it may see; it is shown once:
+
+```bash
+docker compose exec relay relay service:create my-service acme lab
+docker compose exec relay relay service:revoke my-service
+```
+
+```bash
+curl -H "Authorization: Bearer <service-token>" https://relay.example.com/service/teams
+# {"teams":[{"name":"acme","members":["alice","bob"]}]}
+```
+
+Only teams in the token's scope are returned (teams that do not exist are left out). A service token
+works on this endpoint only, and a person's token does not work on it.
+
 A person can be in several teams. Someone who is only in team `acme` cannot see anything of
 another team on the same relay: not its sessions, not its people, not even whether a session
 name exists (the relay answers exactly as for a name that does not exist).
@@ -240,6 +258,13 @@ rest of the relay keeps working. Client registration is rate limited (20 per add
 `public/index.php`, including `/.well-known/oauth-protected-resource`,
 `/.well-known/oauth-authorization-server`, `/oauth/*` and `/mcp`, and must pass the
 `Authorization` header on to PHP.
+
+By default only claude.ai's callback and loopback `/callback` URLs are accepted as OAuth redirects.
+A trusted service that needs its own callback can be allowed with `oauth_extra_redirects` in
+`config.php` or `RELAY_OAUTH_EXTRA_REDIRECTS` in `.env` (comma-separated, for example
+`https://app.example.com/oauth/relay-callback`). Entries must be absolute `https://` URIs without
+query or fragment and are matched exactly (no prefix, no wildcard); invalid entries are ignored
+and logged.
 
 ## Conflict rules
 

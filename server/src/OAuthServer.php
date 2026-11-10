@@ -26,10 +26,11 @@ final class OAuthServer
 	/**
 	 * @param PDO $pdo
 	 * @param string $baseUrl Public base URL without trailing slash, e.g. https://relay.example.org.
+	 * @param list<string> $extraRedirects Extra exact https redirect URIs that clients may register (default none).
 	 */
-	public function __construct(private PDO $pdo, private string $baseUrl)
+	public function __construct(private PDO $pdo, private string $baseUrl, array $extraRedirects = array())
 	{
-		$this->store = new OAuthStore($pdo);
+		$this->store = new OAuthStore($pdo, $extraRedirects);
 	}
 
 	/**
@@ -106,8 +107,8 @@ final class OAuthServer
 			return self::error(400, 'invalid_redirect_uri', 'redirect_uris must be a list of 1 to 5 URIs.');
 		}
 		foreach($uris as $uri) {
-			if(is_string($uri) === false || OAuthStore::allowedRedirect($uri) === false) {
-				return self::error(400, 'invalid_redirect_uri', 'Only ' . OAuthStore::CLAUDE_CALLBACK . ' and http://localhost:<port>/callback or http://127.0.0.1:<port>/callback are allowed.');
+			if(is_string($uri) === false || $this->store->allowedRedirect($uri) === false) {
+				return self::error(400, 'invalid_redirect_uri', 'Only ' . OAuthStore::CLAUDE_CALLBACK . ' and http://localhost:<port>/callback or http://127.0.0.1:<port>/callback are allowed, plus any redirect URIs the relay operator configured.');
 			}
 		}
 		$method = $body['token_endpoint_auth_method'] ?? 'none';
@@ -149,7 +150,7 @@ final class OAuthServer
 			return self::errorPage(400, 'Unknown client. Remove the connector and add it again.');
 		}
 		$registered = array_filter($client['redirect_uris'], static fn(string $uri): bool => OAuthStore::redirectMatches($uri, $params['redirect_uri']));
-		if($registered === array() || OAuthStore::allowedRedirect($params['redirect_uri']) === false) {
+		if($registered === array() || $this->store->allowedRedirect($params['redirect_uri']) === false) {
 			return self::errorPage(400, 'This redirect address is not registered for this client.');
 		}
 
