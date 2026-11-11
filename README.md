@@ -4,6 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/dimitrihilverda/claude-session-relay)](https://github.com/dimitrihilverda/claude-session-relay/releases)
 [![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)](#2-install-the-plugin-every-developer)
 [![MCP](https://img.shields.io/badge/MCP-remote%20server%20%2B%20OAuth-6b46c1)](#use-from-claudeai--cowork)
+[![Listed on mcpservers.org](https://mcpservers.org/badge.svg)](https://mcpservers.org/servers/dimitrihilverda/claude-session-relay)
 
 Let Claude Code sessions see each other, message each other and stay out of each other's way in
 git: on **one machine** right after installing the plugin, or across **different machines** with a
@@ -305,6 +306,8 @@ Full details: [Privacy](PRIVACY.md).
   may not see behaves exactly like something that does not exist. Known residuals: message ids
   are global and sequential, and response timing is not padded.
 - Messages from other sessions are presented to Claude as data, never as instructions.
+- A service token only reads team names and member names of the teams in its scope, on
+  `GET /service/teams`; it cannot see sessions or messages.
 
 ## Development
 

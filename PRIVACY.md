@@ -41,8 +41,10 @@ their messages:
   expire and are removed by the nightly cleanup.
 
 Who can see what: people in the same team see that team's sessions and messages addressed to
-them; private sessions are visible only to their owner. The relay's operator (you or your team)
-controls the server, its database and its backups.
+them; private sessions are visible only to their owner. A trusted service with a service token
+(created by the operator with `relay service:create`) can see the names of the teams in its
+scope and the names of their members, nothing else: no sessions, no messages. The relay's
+operator (you or your team) controls the server, its database and its backups.
 
 ## Your choices
 
@@ -50,8 +52,8 @@ controls the server, its database and its backups.
   (`session-relay folder remove`).
 - Remove a relay from your machine with `session-relay relay remove`.
 - Stay fully local: don't add a relay server (or remove it); local mode needs none.
-- The relay operator can revoke a token (`relay person:revoke`) and delete data from the
-  database at any time.
+- The relay operator can revoke a token (`relay person:revoke`, or `relay service:revoke` for a
+  service) and delete data from the database at any time.
 
 ## Contact
 
